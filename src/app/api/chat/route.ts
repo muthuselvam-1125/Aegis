@@ -166,13 +166,11 @@ CRITICAL RULES & GUARDRAILS:
           // Handle function calls
           if (result.response.functionCalls()) {
             const functionCalls = result.response.functionCalls();
-            console.log("GEMINI TOOL CALL:", JSON.stringify(functionCalls));
             
             const functionResponses = await Promise.all(
               functionCalls!.map(async (call) => {
                 let apiResponse: any = {};
                 try {
-                  console.log("EXECUTING TOOL:", call.name, call.args);
                   if (call.name === "getWeather") {
                     const locationArg = (call.args as any).location as string;
                     const geo = await geocodeLocation(locationArg);
@@ -250,7 +248,6 @@ CRITICAL RULES & GUARDRAILS:
           }
 
           text = result.response.text();
-          console.log(`[Disaster Copilot] Successfully served by Gemini (${modelName})`);
           break; // Break the Gemini fallback loop if successful
         } catch (err: any) {
           console.warn(`[Gemini Fallback] ${modelName} failed: ${err.message.split('\n')[0]}`);
@@ -364,7 +361,6 @@ CRITICAL RULES & GUARDRAILS:
         } else {
           text = responseMessage?.content || "";
         }
-        console.log(`[Disaster Copilot] Successfully served by Groq Fallback (openai/gpt-oss-120b)`);
       } catch (err: any) {
         lastGroqError = err;
         console.error("[Groq Fallback] Error:", err.message);

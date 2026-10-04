@@ -26,6 +26,7 @@ export default function AssistantPage() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [formError, setFormError] = useState("");
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -95,7 +96,7 @@ export default function AssistantPage() {
       recognitionRef.current?.stop();
     } else {
       if (!recognitionRef.current) {
-        alert("Speech recognition is not supported in this browser. Try Chrome or Edge.");
+        setFormError("Speech recognition is not supported in this browser. Try Chrome or Edge.");
         return;
       }
       recognitionRef.current.start();
@@ -292,6 +293,7 @@ export default function AssistantPage() {
             
           </div>
           
+          {formError && <div className="text-center mt-2 text-red-400 text-[12px] font-semibold">{formError}</div>}
           <div className="text-center mt-3 text-[10px] uppercase font-mono tracking-widest text-white/30 flex items-center justify-center gap-2">
             {isListening ? (
               <span className="flex items-center gap-2 text-[#66fcf1]">

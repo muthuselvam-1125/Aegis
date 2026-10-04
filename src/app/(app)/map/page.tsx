@@ -100,6 +100,26 @@ export default function PerfectCleanMapPage() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState<boolean>(false);
+  const [isLowBandwidth, setIsLowBandwidth] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkPrefs = () => {
+      try {
+        const raw = localStorage.getItem("aegis:prefs");
+        if (raw) {
+          const p = JSON.parse(raw);
+          setIsLowBandwidth(!!p.lowBandwidth);
+          if (p.lowBandwidth) {
+            setBaseStyle((s) => (s === "satellite" ? "clean" : s));
+            setLayers((l) => ({ ...l, radar: false, quakes: false }));
+          }
+        }
+      } catch {}
+    };
+    checkPrefs();
+    window.addEventListener("aegis:prefs_changed", checkPrefs);
+    return () => window.removeEventListener("aegis:prefs_changed", checkPrefs);
+  }, []);
 
   // Load telemetry
   const loadData = async () => {
@@ -268,29 +288,33 @@ export default function PerfectCleanMapPage() {
       mapInstanceRef.current = map;
 
       // Fetch Earthquakes
-      fetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson")
-        .then((r) => r.json())
-        .then((data) => {
-          if (!data || !data.features) return;
-          data.features.forEach((feat: any) => {
-            const [lon, lat, depth] = feat.geometry.coordinates;
-            const mag = feat.properties.mag;
-            
-            // Only show earthquakes Magnitude 5.0 and above
-            if (mag < 5.0) return;
-
-            const marker = L.circleMarker([lat, lon], {
-              radius: Math.max(4, mag * 2), // Slightly smaller radius to not cover nearby places visually
-              fillColor: "#a855f7",
-              color: "#ffffff",
-              weight: 1.5,
-              fillOpacity: 0.6,
+      const rawPrefs = localStorage.getItem("aegis:prefs");
+      const skipQuakes = rawPrefs ? !!JSON.parse(rawPrefs).lowBandwidth : false;
+      if (!skipQuakes) {
+        fetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson")
+          .then((r) => r.json())
+          .then((data) => {
+            if (!data || !data.features) return;
+            data.features.forEach((feat: any) => {
+              const [lon, lat, depth] = feat.geometry.coordinates;
+              const mag = feat.properties.mag;
+              
+              // Only show earthquakes Magnitude 5.0 and above
+              if (mag < 5.0) return;
+  
+              const marker = L.circleMarker([lat, lon], {
+                radius: Math.max(4, mag * 2), // Slightly smaller radius to not cover nearby places visually
+                fillColor: "#a855f7",
+                color: "#ffffff",
+                weight: 1.5,
+                fillOpacity: 0.6,
+              });
+              marker.bindPopup(`<b>USGS Seismic Alert</b><br>Magnitude: M${mag}<br>Depth: ${depth}km<br>${feat.properties.place}`);
+              layerGroupsRef.current.quakes?.addLayer(marker);
             });
-            marker.bindPopup(`<b>USGS Seismic Alert</b><br>Magnitude: M${mag}<br>Depth: ${depth}km<br>${feat.properties.place}`);
-            layerGroupsRef.current.quakes?.addLayer(marker);
-          });
-        })
-        .catch(() => {});
+          })
+          .catch(() => {});
+      }
     };
 
     loadLeaflet();
@@ -513,7 +537,7 @@ export default function PerfectCleanMapPage() {
       map.removeLayer(radarLayerRef.current);
     }
 
-    if (layers.radar) {
+    if (layers.radar && !isLowBandwidth) {
       const radarUrl = `https://tilecache.rainviewer.com/v2/radar/${time}/256/{z}/{x}/{y}/2/1_1.png`;
       radarLayerRef.current = L.tileLayer(radarUrl, {
         opacity: 0.55,
@@ -523,7 +547,7 @@ export default function PerfectCleanMapPage() {
       });
       radarLayerRef.current.addTo(map);
     }
-  }, [radarTimestamps, radarFrameIndex, layers.radar]);
+  }, [radarTimestamps, radarFrameIndex, layers.radar, isLowBandwidth]);
 
   // Handle Radar Playback Timer
   useEffect(() => {
@@ -673,7 +697,7 @@ export default function PerfectCleanMapPage() {
           <button onClick={() => setBaseStyle("dark")} className={`px-2.5 py-1.5 ${baseStyle === "dark" ? "bg-ink text-paper font-semibold" : "text-ink-2"}`}>
             Dark
           </button>
-          <button onClick={() => setBaseStyle("satellite")} className={`px-2.5 py-1.5 ${baseStyle === "satellite" ? "bg-ink text-paper font-semibold" : "text-ink-2"}`}>
+          <button onClick={() => !isLowBandwidth && setBaseStyle("satellite")} disabled={isLowBandwidth} className={`px-2.5 py-1.5 ${baseStyle === "satellite" ? "bg-ink text-paper font-semibold" : "text-ink-2"} ${isLowBandwidth ? "opacity-30 cursor-not-allowed" : ""}`} title={isLowBandwidth ? "Disabled in Low-Bandwidth mode" : ""}>
             Satellite
           </button>
         </div>
@@ -693,16 +717,16 @@ export default function PerfectCleanMapPage() {
               <input type="checkbox" checked={layers.places} onChange={(e) => setLayers((s) => ({ ...s, places: e.target.checked }))} />
               📍 Saved Places ({places.length})
             </label>
-            <label className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-surface-2">
-              <input type="checkbox" checked={layers.radar} onChange={(e) => setLayers((s) => ({ ...s, radar: e.target.checked }))} />
+            <label className={`flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-surface-2 ${isLowBandwidth ? "opacity-50" : ""}`} title={isLowBandwidth ? "Disabled in Low-Bandwidth mode" : ""}>
+              <input type="checkbox" disabled={isLowBandwidth} checked={layers.radar && !isLowBandwidth} onChange={(e) => setLayers((s) => ({ ...s, radar: e.target.checked }))} />
               🌧️ RainViewer Radar
             </label>
             <label className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-surface-2">
               <input type="checkbox" checked={layers.hazards} onChange={(e) => setLayers((s) => ({ ...s, hazards: e.target.checked }))} />
               ⚠️ Active Hazards
             </label>
-            <label className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-surface-2">
-              <input type="checkbox" checked={layers.quakes} onChange={(e) => setLayers((s) => ({ ...s, quakes: e.target.checked }))} />
+            <label className={`flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-surface-2 ${isLowBandwidth ? "opacity-50" : ""}`} title={isLowBandwidth ? "Disabled in Low-Bandwidth mode" : ""}>
+              <input type="checkbox" disabled={isLowBandwidth} checked={layers.quakes && !isLowBandwidth} onChange={(e) => setLayers((s) => ({ ...s, quakes: e.target.checked }))} />
               🌋 USGS Earthquakes
             </label>
           </div>
@@ -710,7 +734,7 @@ export default function PerfectCleanMapPage() {
       </div>
 
       {/* Radar Control Bar */}
-      {radarTimestamps.length > 0 && (
+      {radarTimestamps.length > 0 && layers.radar && !isLowBandwidth && (
         <div className="absolute inset-x-3 bottom-3 z-10 rounded-md border border-line bg-surface/95 px-3 py-2 backdrop-blur shadow-sm">
           <div className="flex items-center gap-3">
             <button onClick={() => setPlayingRadar((p) => !p)} className="rounded-sm bg-ink px-3 py-1 text-xs font-medium text-paper">

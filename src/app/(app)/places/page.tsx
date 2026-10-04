@@ -42,6 +42,7 @@ export default function PlacesPage() {
   const [showAddMember, setShowAddMember] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [trackingId, setTrackingId] = useState<number | null>(null);
+  const [formError, setFormError] = useState("");
   const watchIdRef = useRef<number | null>(null);
 
   const stopTracking = () => {
@@ -95,7 +96,7 @@ export default function PlacesPage() {
 
   const activateLiveSOS = (id: number) => {
     if (!("geolocation" in navigator)) {
-      alert("GPS is not supported in this browser.");
+      setFormError("GPS is not supported in this browser.");
       return;
     }
     
@@ -143,6 +144,8 @@ export default function PlacesPage() {
         <h1 className="display text-3xl">Household</h1>
         <p className="mt-1 text-sm text-muted">Everyone and every place you need to track. Check-ins are private to your household.</p>
       </header>
+
+      {formError && <div className="mb-4 text-emergency text-sm font-semibold">{formError}</div>}
 
       {needHelp.length > 0 && (
         <div className="mb-4 flex items-center gap-3 rounded-md border-2 px-4 py-3 bg-surface" style={{ borderColor: "var(--warning)" }}>
@@ -349,6 +352,7 @@ function AddMemberForm({ places, onDone }: { places: Place[]; onDone: () => void
   const [suggestions, setSuggestions] = useState<GeocodingResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState("");
   const submittingRef = useRef(false);
 
   useEffect(() => {
@@ -399,7 +403,7 @@ function AddMemberForm({ places, onDone }: { places: Place[]; onDone: () => void
     if (placeMode === "new") {
       if (!newPlace.name || !newPlace.lat || !newPlace.lon) return;
       if (!newPlace.label || newPlace.label.trim() === "") {
-        alert("Type is missing! Please fill the Type field.");
+        setFormError("Type is missing! Please fill the Type field.");
         return;
       }
     }
@@ -564,6 +568,7 @@ function AddMemberForm({ places, onDone }: { places: Place[]; onDone: () => void
         )}
       </div>
 
+      {formError && <div className="mt-2 text-emergency text-sm font-semibold">{formError}</div>}
       <div className="mt-4 flex gap-2">
         <Button
           variant="primary"
@@ -616,6 +621,7 @@ function EditMemberForm({
   const [suggestions, setSuggestions] = useState<GeocodingResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState("");
   const [removing, setRemoving] = useState(false);
   const savingRef = useRef(false);
   const removingRef = useRef(false);
@@ -666,7 +672,7 @@ function EditMemberForm({
     if (placeMode === "new") {
       if (!newPlace.name || !newPlace.lat || !newPlace.lon) return;
       if (!newPlace.label || newPlace.label.trim() === "") {
-        alert("Type is missing! Please fill the Type field.");
+        setFormError("Type is missing! Please fill the Type field.");
         return;
       }
     }
@@ -842,6 +848,7 @@ function EditMemberForm({
         )}
       </div>
 
+      {formError && <div className="mt-2 text-emergency text-sm font-semibold">{formError}</div>}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button
           variant="primary"
@@ -882,6 +889,7 @@ function AddPlaceForm({ onDone }: { onDone: () => void }) {
   const [suggestions, setSuggestions] = useState<GeocodingResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState("");
   const submittingRef = useRef(false);
 
   useEffect(() => {
@@ -932,7 +940,7 @@ function AddPlaceForm({ onDone }: { onDone: () => void }) {
     if (!form.name || !form.lat || !form.lon) return;
     
     if (!form.label || form.label.trim() === "") {
-      alert("Type is missing! Please fill the Type field.");
+      setFormError("Type is missing! Please fill the Type field.");
       return;
     }
     
@@ -1023,6 +1031,7 @@ function AddPlaceForm({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
+      {formError && <div className="mt-2 text-emergency text-sm font-semibold">{formError}</div>}
       <div className="mt-4 flex gap-2">
         <Button variant="primary" disabled={busy || !form.name || !form.lat} onClick={submit}>
           Save Location
