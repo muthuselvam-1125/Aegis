@@ -1,0 +1,207 @@
+@import "tailwindcss";
+
+/* Class-based dark mode (manual + auto) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+  AEGIS design tokens
+  --------------------
+  Base = warm neutral (bone paper / graphite), NOT navy.
+  Color is reserved for hazard semantics, tied to an NWS/IMD-style
+  escalation and Okabe-Ito-adjusted for colorblind safety.
+  Every hazard state is ALSO carried by icon + shape + text.
+*/
+:root {
+  --paper: #ece7db;
+  --surface: #fbf9f3;
+  --surface-2: #f2eee2;
+  --surface-3: #e8e2d3;
+  --ink: #191510;
+  --ink-2: #4a4338;
+  --muted: #6f675a;
+  --line: #d7cfbe;
+  --line-strong: #bcb29c;
+
+  /* hazard severity escalation (light) */
+  --calm: #0f7a6f;
+  --advisory: #9a7400;
+  --watch: #b85c00;
+  --warning: #bf2a19;
+  --emergency: #9a1583;
+
+  /* hazard tints for badge backgrounds (light) */
+  --calm-bg: #d9ece9;
+  --advisory-bg: #f3e8c0;
+  --watch-bg: #f6e0c6;
+  --warning-bg: #f6d7d1;
+  --emergency-bg: #f2d3ec;
+
+  /* non-hazard functional hues */
+  --info: #23568f;       /* links / non-hazard emphasis */
+  --live: #cf7a12;       /* beacon: live-data pulse + focus accents */
+  --official: #23568f;   /* official-source marker */
+  --community: #6b4fa0;  /* community/ground-truth marker (distinct from official) */
+
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-sans: var(--font-public), system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  --text-scale: 1;
+}
+
+.dark {
+  --paper: #0e1113;
+  --surface: #171b1e;
+  --surface-2: #1e2428;
+  --surface-3: #262d32;
+  --ink: #eee9df;
+  --ink-2: #c3bdb0;
+  --muted: #8f9698;
+  --line: #2b3237;
+  --line-strong: #3c454b;
+
+  --calm: #35c2b2;
+  --advisory: #e5b93b;
+  --watch: #f0913c;
+  --warning: #f0584a;
+  --emergency: #e35fc9;
+
+  --calm-bg: #10312f;
+  --advisory-bg: #33290c;
+  --watch-bg: #35240f;
+  --warning-bg: #3a1815;
+  --emergency-bg: #331033;
+
+  --info: #6ea8e6;
+  --live: #f0a13d;
+  --official: #6ea8e6;
+  --community: #a98fe0;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-calm: var(--calm);
+  --color-advisory: var(--advisory);
+  --color-watch: var(--watch);
+  --color-warning: var(--warning);
+  --color-emergency: var(--emergency);
+
+  --color-calm-bg: var(--calm-bg);
+  --color-advisory-bg: var(--advisory-bg);
+  --color-watch-bg: var(--watch-bg);
+  --color-warning-bg: var(--warning-bg);
+  --color-emergency-bg: var(--emergency-bg);
+
+  --color-info: var(--info);
+  --color-live: var(--live);
+  --color-official: var(--official);
+  --color-community: var(--community);
+
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+}
+
+* {
+  border-color: var(--line);
+}
+
+html {
+  font-size: calc(100% * var(--text-scale));
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Instrument readouts */
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+.display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.02em;
+}
+
+/* High-contrast focus — visible in bright sunlight */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--live);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Live-data beacon pulse — decorative, disabled under reduced motion */
+@keyframes beacon {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.beacon {
+  animation: beacon 2.2s ease-in-out infinite;
+}
+@keyframes sweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.radar-sweep { animation: sweep 4s linear infinite; }
+
+@keyframes draw {
+  from { stroke-dashoffset: var(--len); }
+  to { stroke-dashoffset: 0; }
+}
+
+/* Reduced motion: remove ALL non-essential animation entirely */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Thin custom scrollbars for panels */
+.scroll-thin::-webkit-scrollbar { height: 8px; width: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 4px;
+}
+
+/* RTL support hook */
+[dir="rtl"] .flip-x { transform: scaleX(-1); }
+
+.hairline { border-color: var(--line); }
+.grain {
+  background-image: radial-gradient(var(--line) 0.5px, transparent 0.5px);
+  background-size: 4px 4px;
+}
