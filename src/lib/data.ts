@@ -358,11 +358,11 @@ export async function getChecklist() {
 
 let lastSync = 0;
 
-export async function syncPlatformAlerts() {
+export async function syncPlatformAlerts(forceDigest = false) {
   try {
     const now = Date.now();
-    // Only run this once every 10 seconds maximum to avoid spamming the weather API
-    if (now - lastSync < 10000) return;
+    // Only run this once every 10 seconds maximum to avoid spamming the weather API (bypass if forceDigest)
+    if (!forceDigest && now - lastSync < 10000) return { skipped: true, reason: "cooldown" };
     lastSync = now;
     
     await ensureSeeded();
@@ -560,9 +560,9 @@ export async function syncPlatformAlerts() {
           );
         }
 
-        // Morning Digest Generation (runs between 5 AM and 9 AM)
+        // Morning Digest Generation (runs between 5 AM and 9 AM local, or forced via cron)
         const currentHour = new Date(now).getHours();
-        if (currentHour >= 5 && currentHour <= 9) {
+        if (forceDigest || (currentHour >= 5 && currentHour <= 9)) {
           const todayStr = new Date(now).toISOString().split('T')[0];
           const digestTitle = `Daily Morning Digest - ${todayStr}`;
           
@@ -650,13 +650,13 @@ export async function syncPlatformAlerts() {
                 }
               }
             } else {
-               // Generate a hidden placeholder alert to ensure we don't recalculate multiple times today
+               // When weather is calm, save record and email calm morning digest
                await db.insert(alerts).values({
                  hazard: "flood",
                  severity: "calm",
                  title: digestTitle,
-                 headline: "All clear today.",
-                 instruction: "Enjoy your day!",
+                 headline: "All clear today. Mild temperatures and pleasant conditions ahead.",
+                 instruction: "Enjoy your day! No hazardous weather expected in your area.",
                  area: p.name,
                  placeId: p.id,
                  source: "platform",
@@ -664,9 +664,23 @@ export async function syncPlatformAlerts() {
                  sourceUrl: "",
                  confidence: 90,
                  onset: new Date(),
-                 expires: new Date(0), // Automatically expired so it's instantly hidden from UI
+                 expires: new Date(0), // Automatically expired so it's instantly hidden from UI alerts
                  active: false,
               });
+
+              if (p.userId) {
+                const userRows = await db.select().from(users).where(eq(users.id, p.userId)).limit(1);
+                if (userRows.length > 0) {
+                  await sendAlertEmail(userRows[0].email, {
+                    hazard: "flood",
+                    severity: "calm",
+                    title: "Daily Morning Digest",
+                    headline: "All clear today! No heavy rain or extreme heat forecasted.",
+                    instruction: "Conditions are calm and safe. Enjoy your day!",
+                    area: p.name
+                  });
+                }
+              }
             }
           }
         }
@@ -674,8 +688,15 @@ export async function syncPlatformAlerts() {
         console.warn(`[syncPlatformAlerts] Failed for place ${p.name}:`, err);
       }
     }));
-  } catch (e) {
-    console.warn("syncPlatformAlerts error:", e);
+
+    return {
+      totalPlaces: allPlaces.length,
+      syncedAt: new Date().toISOString(),
+    };
+  } catch (e: any) {
+    console.error("[syncPlatformAlerts] Critical error:", e);
+    if (forceDigest) throw e;
   }
 }
+
 

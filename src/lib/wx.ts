@@ -26,32 +26,55 @@ export type WxCode =
   | "sleet";
 
 const CODE_LABEL: Record<WxCode, string> = {
-  clear: "Clear",
-  partly: "Partly cloudy",
+  clear: "Clear Sky",
+  partly: "Partly Cloudy",
   cloudy: "Overcast",
   fog: "Fog",
-  drizzle: "Light drizzle",
+  drizzle: "Drizzle",
   rain: "Rain",
-  "heavy-rain": "Heavy rain",
+  "heavy-rain": "Heavy Rain",
   thunder: "Thunderstorms",
   snow: "Snow",
   sleet: "Sleet",
 };
 
 export function codeLabel(c: WxCode): string {
-  return CODE_LABEL[c];
+  return CODE_LABEL[c] || "Overcast";
 }
 
-export function wmoToWxCode(code: number): WxCode {
+export function wmoToWxCode(code: number, rainMm = 0, precipMm = 0): WxCode {
+  // Code 0 -> Clear Sky
   if (code === 0) return "clear";
-  if (code >= 1 && code <= 3) return "partly";
+  // Codes 1, 2 -> Partly Cloudy
+  if (code === 1 || code === 2) return "partly";
+  // Code 3 -> Overcast
+  if (code === 3) return "cloudy";
+  // Codes 45, 48 -> Fog
   if (code === 45 || code === 48) return "fog";
-  if (code >= 51 && code <= 57) return "drizzle";
-  if (code >= 61 && code <= 65) return "rain";
-  if (code >= 80 && code <= 82) return "heavy-rain";
+
+  // Strict Real-Time Ground Truth Check:
+  // If current rain/precipitation is 0 or non-measurable trace (<= 0.1 mm),
+  // NEVER display "Drizzle" or "Rain" as the real-time condition.
+  const hasMeasurableRain = (rainMm > 0.1 || precipMm > 0.1);
+
+  // Codes 51, 53, 55, 56, 57 -> Drizzle (ONLY if current rain > 0.1 mm)
+  if (code >= 51 && code <= 57) {
+    return hasMeasurableRain ? "drizzle" : "cloudy";
+  }
+
+  // Codes 61, 63, 65, 80, 81, 82 -> Rain / Heavy Rain (ONLY if current rain > 0.1 mm)
+  if ((code >= 61 && code <= 65) || (code >= 80 && code <= 82)) {
+    if (!hasMeasurableRain) return "cloudy";
+    if (code >= 80 || code === 65 || precipMm > 2.5) return "heavy-rain";
+    return "rain";
+  }
+
+  // Codes 95, 96, 99 -> Thunderstorms
   if (code === 95 || code === 96 || code === 99) return "thunder";
-  if (code >= 71 && code <= 77) return "snow";
-  if (code === 85 || code === 86) return "snow";
+
+  // Codes 71-77, 85, 86 -> Snow
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "snow";
+
   return "cloudy";
 }
 
@@ -68,6 +91,9 @@ export interface CurrentConditions {
   gustKph: number;
   uvIndex: number;
   code: WxCode;
+  precipitationMm: number;
+  rainMm: number;
+  precipProb: number;
   aqi: number;
   pm25: number;
   pm10: number;
@@ -188,6 +214,8 @@ export function currentConditionsSync(lat: number, lon: number, now = new Date()
   const feels = Math.round((tempE.mean > 26 ? tempE.mean + (humidity / 100) * 4 : tempE.mean - (windKph / 30) * 2) * 10) / 10;
   const aqi = Math.round(18 + noise(lat, lon, t, 8) * 150);
 
+  const precipProb = Math.round(Math.min(100, precip * 12 + cloud * 20));
+
   return {
     tempC: tempE,
     feelsLikeC: feels,
@@ -201,6 +229,9 @@ export function currentConditionsSync(lat: number, lon: number, now = new Date()
     gustKph: Math.round(windKph * (1.3 + noise(lat, lon, t, 10) * 0.6)),
     uvIndex: hod > 6 && hod < 19 ? Math.round((1 - cloud) * (Math.max(0, 11 - Math.abs(lat) * 0.12))) : 0,
     code: pickCode(cloud, precip, tempE.mean),
+    precipitationMm: Math.round(precip * 10) / 10,
+    rainMm: Math.round(precip * 10) / 10,
+    precipProb,
     aqi,
     pm25: Math.round(aqi * 0.45),
     pm10: Math.round(aqi * 0.7),
@@ -228,7 +259,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
 /* Production-Grade Live Async Integrations */
 export async function currentConditions(lat: number, lon: number, now = new Date()): Promise<CurrentConditions> {
   try {
-    const wxUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index,visibility&timezone=auto`;
+    const wxUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index,visibility,precipitation_probability&timezone=auto`;
     const aqUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi,pm2_5,pm10,grass_pollen,birch_pollen,ragweed_pollen&timezone=auto`;
 
     const [wxRes, aqRes] = await Promise.all([
@@ -246,6 +277,10 @@ export async function currentConditions(lat: number, lon: number, now = new Date
 
     const temp = currentWx.temperature_2m;
     const uv = currentWx.uv_index ?? 0;
+    const precip = Number(currentWx.precipitation ?? 0);
+    const rain = Number(currentWx.rain ?? 0);
+    const rawCode = Number(currentWx.weather_code ?? 0);
+    const precipProb = Number(currentWx.precipitation_probability ?? 0);
     const pm25 = currentAq.pm2_5 ?? 12;
     const pm10 = currentAq.pm10 ?? 20;
     const rawAqi = currentAq.us_aqi ?? 35;
@@ -263,6 +298,19 @@ export async function currentConditions(lat: number, lon: number, now = new Date
     else if (maxPollen > 60) pollenLevel = "high";
     else if (maxPollen > 20) pollenLevel = "moderate";
 
+    // Strict Real-Time Condition Mapping:
+    // If current rain/precipitation is 0 or non-measurable trace, NEVER show Drizzle or Rain.
+    const finalCode = (() => {
+      let c = wmoToWxCode(rawCode, rain, precip);
+      // Only elevate if active rain is actually falling
+      if ((precip > 0.1 || rain > 0.1) && (c === "clear" || c === "partly" || c === "cloudy")) {
+        if (precip > 2.5) return "heavy-rain";
+        if (precip > 0.5) return "rain";
+        return "drizzle";
+      }
+      return c;
+    })();
+
     return {
       tempC: tempEnsemble,
       feelsLikeC: currentWx.apparent_temperature ?? temp,
@@ -275,7 +323,10 @@ export async function currentConditions(lat: number, lon: number, now = new Date
       windDir: currentWx.wind_direction_10m ?? 0,
       gustKph: currentWx.wind_gusts_10m ?? 8,
       uvIndex: Math.round(uv),
-      code: wmoToWxCode(currentWx.weather_code ?? 0),
+      code: finalCode,
+      precipitationMm: Math.round(precip * 10) / 10,
+      rainMm: Math.round(rain * 10) / 10,
+      precipProb: Math.round(precipProb),
       aqi: rawAqi,
       pm25: Math.round(pm25),
       pm10: Math.round(pm10),
@@ -300,14 +351,14 @@ export async function hourly(lat: number, lon: number, hours = 48, now = new Dat
     const out: HourPoint[] = [];
 
     for (let i = 0; i < Math.min(hours, hData.time.length); i++) {
-      const realUtcTime = new Date(hData.time[i] + "Z").getTime() - (data.utc_offset_seconds || 0) * 1000;
+      const pMm = Math.round((hData.precipitation[i] ?? 0) * 10) / 10;
       out.push({
-        time: new Date(realUtcTime).toISOString(),
+        time: hData.time[i],
         tempC: Math.round(hData.temperature_2m[i] * 10) / 10,
-        precipMm: Math.round(hData.precipitation[i] * 10) / 10,
-        precipProb: Math.round(hData.precipitation_probability[i]),
+        precipMm: pMm,
+        precipProb: Math.round(hData.precipitation_probability[i] ?? 0),
         windKph: Math.round(hData.wind_speed_10m[i]),
-        code: wmoToWxCode(hData.weather_code[i] ?? 0),
+        code: wmoToWxCode(hData.weather_code[i] ?? 0, pMm, pMm),
       });
     }
     return out;
@@ -345,14 +396,14 @@ export async function daily(lat: number, lon: number, days = 14, now = new Date(
     const out: DayPoint[] = [];
 
     for (let i = 0; i < Math.min(days, dData.time.length); i++) {
-      const realUtcTime = new Date(dData.time[i] + "T12:00:00Z").getTime() - (data.utc_offset_seconds || 0) * 1000;
+      const dPrecip = Math.round((dData.precipitation_sum[i] ?? 0) * 10) / 10;
       out.push({
-        date: new Date(realUtcTime).toISOString(),
+        date: dData.time[i],
         hiC: Math.round(dData.temperature_2m_max[i]),
         loC: Math.round(dData.temperature_2m_min[i]),
         precipProb: Math.round(dData.precipitation_probability_max[i] ?? 0),
-        precipMm: Math.round(dData.precipitation_sum[i] * 10) / 10,
-        code: wmoToWxCode(dData.weather_code[i] ?? 0),
+        precipMm: dPrecip,
+        code: wmoToWxCode(dData.weather_code[i] ?? 0, dPrecip, dPrecip),
         agreement: Math.round(Math.max(45, 96 - i * 3.4)),
       });
     }

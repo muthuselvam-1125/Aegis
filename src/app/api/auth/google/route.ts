@@ -7,7 +7,14 @@ import bcrypt from "bcryptjs";
 
 export async function POST(req: NextRequest) {
   try {
-    const { credential, email, name, avatarUrl } = await req.json();
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid request payload format" }, { status: 400 });
+    }
+
+    const { credential, email, name, avatarUrl } = body;
 
     let userEmail = email;
     let userName = name;
@@ -18,7 +25,13 @@ export async function POST(req: NextRequest) {
       try {
         const parts = credential.split(".");
         if (parts.length === 3) {
-          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
+          let rawPayload = "";
+          try {
+            rawPayload = Buffer.from(parts[1], "base64url").toString("utf-8");
+          } catch {
+            rawPayload = Buffer.from(parts[1], "base64").toString("utf-8");
+          }
+          const payload = JSON.parse(rawPayload);
           if (payload.email) userEmail = payload.email;
           if (payload.name) userName = payload.name;
           if (payload.picture) userAvatar = payload.picture;
@@ -28,12 +41,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (!userEmail || !userEmail.includes("@")) {
+    if (!userEmail || typeof userEmail !== "string" || !userEmail.includes("@")) {
       return NextResponse.json({ error: "Valid Google account email required" }, { status: 400 });
     }
 
     const cleanEmail = userEmail.trim().toLowerCase();
-    const displayName = userName && userName.trim() !== "" ? userName.trim() : cleanEmail.split("@")[0];
+    const displayName = userName && String(userName).trim() !== "" ? String(userName).trim() : cleanEmail.split("@")[0];
 
     // 1. Check if user already exists
     let [existingUser] = await db.select().from(users).where(eq(users.email, cleanEmail)).limit(1);
@@ -70,6 +83,13 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("Google SSO Auth Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to authenticate with Google" }, { status: 500 });
+    const msg = error?.message || "Failed to authenticate with Google";
+    if (msg.includes("ECONNREFUSED") || msg.includes("connect") || msg.includes("timeout")) {
+      return NextResponse.json(
+        { error: "Database offline. Please ensure PostgreSQL is running." },
+        { status: 500 }
+      );
+    }
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

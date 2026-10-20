@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import { WxIcon, HazardIcon, IconArrow } from "@/components/icons";
 import { Panel, PanelHeader, SeverityBadge, AgreementMeter, SourceTag, SeverityMark } from "@/components/ui";
@@ -9,6 +9,7 @@ import { dirName, aqiCategory, codeLabel, type WxCode, type ClimateProjection } 
 import { LiveGauge } from "@/components/LiveGauge";
 import { type ClimateCheck } from "@/lib/nasaPower";
 import { LocationSetupModal } from "@/components/LocationSetupModal";
+import { NewsTicker } from "@/components/NewsTicker";
 
 export function useUnits() {
   const [isImp, setIsImp] = useState(false);
@@ -33,7 +34,8 @@ type Ensemble = { mean: number; min: number; max: number; agreement: number };
 type Cur = {
   tempC: Ensemble; feelsLikeC: number; humidity: number; dewPointC: number; pressureHpa: number;
   pressureTrend: string; visibilityKm: number; windKph: number; windDir: number; gustKph: number;
-  uvIndex: number; code: WxCode; aqi: number; pm25: number; pm10: number; pollen: string; observedAt: string; timezone: string;
+  uvIndex: number; code: WxCode; precipitationMm?: number; rainMm?: number; precipProb?: number;
+  aqi: number; pm25: number; pm10: number; pollen: string; observedAt: string; timezone: string;
 };
 type Hour = { time: string; tempC: number; precipMm: number; precipProb: number; windKph: number; code: WxCode };
 type Day = { date: string; hiC: number; loC: number; precipProb: number; precipMm: number; code: WxCode; agreement: number };
@@ -152,6 +154,9 @@ export default function Today() {
 
   return (
     <div className="mx-auto max-w-6xl px-3 py-4 md:px-6 md:py-6">
+      {/* News Ticker Bar */}
+      <NewsTicker places={places.length > 0 ? places : [fc.place]} activePlaceId={placeId} />
+
       {/* Place selector */}
       <div className="mb-4 flex items-center gap-2 overflow-x-auto scroll-thin pb-1">
         {places.map((p) => {
@@ -327,9 +332,35 @@ export default function Today() {
 
 function HeroCondition({ c, place, isNight, sun }: { c: Cur; place: Place; isNight: boolean; sun: Sun }) {
   const u = useUnits();
+  
+  let bgGradient = "";
+  let glowColor = "";
+  let borderColor = "";
+  let isRain = false;
+
+  if (c.code === "rain" || c.code === "heavy-rain" || c.code === "drizzle" || c.code === "sleet") {
+    bgGradient = "linear-gradient(135deg, #111a2e 0%, #1c2738 60%, #0b0f19 100%)";
+    borderColor = "rgba(56, 189, 248, 0.2)";
+    glowColor = "rgba(56, 189, 248, 0.15)";
+    isRain = true;
+  } else if (c.code === "thunder") {
+    bgGradient = "linear-gradient(135deg, #19142b 0%, #1f1b36 60%, #0d0f17 100%)";
+    borderColor = "rgba(139, 92, 246, 0.2)";
+    glowColor = "rgba(139, 92, 246, 0.15)";
+  } else if (c.code === "clear" || c.code === "partly") {
+    bgGradient = "linear-gradient(135deg, #2a1f1a 0%, #221c1f 60%, #151214 100%)";
+    borderColor = "rgba(251, 146, 60, 0.1)";
+    glowColor = "rgba(251, 146, 60, 0.1)";
+  } else {
+    // Default / Cloudy
+    bgGradient = "linear-gradient(135deg, #16181d 0%, #1e2028 60%, #0f1115 100%)";
+    borderColor = "rgba(255, 255, 255, 0.05)";
+    glowColor = "rgba(255, 255, 255, 0.05)";
+  }
+
   return (
-    <Panel className="overflow-hidden">
-      <div className="grid gap-0 md:grid-cols-[1.3fr_1fr]">
+    <Panel className="relative overflow-hidden" style={{ background: bgGradient, borderColor: borderColor, borderWidth: borderColor ? '1px' : undefined }}>
+      <div className="relative z-10 grid gap-0 md:grid-cols-[1.3fr_1fr]">
         <div className="p-5 md:p-7">
           <div className="mono text-[11px] uppercase tracking-[0.18em] text-muted">
             {place.name} · {place.region}
@@ -343,14 +374,20 @@ function HeroCondition({ c, place, isNight, sun }: { c: Cur; place: Place; isNig
                 {Math.round(u.tc(c.tempC.min))}° / {Math.round(u.tc(c.tempC.max))}° ensemble · feels {Math.round(u.tc(c.feelsLikeC))}°
               </div>
             </div>
-            <WxIcon code={c.code} size={64} style={{ color: "var(--ink-2)" }} className="mt-3 shrink-0" />
+            <div className="relative mt-3 shrink-0">
+              <div className="absolute inset-0 blur-[28px] rounded-full" style={{ background: glowColor, transform: 'scale(1.5)' }} />
+              <WxIcon code={c.code} size={64} style={{ color: "var(--ink)" }} className="relative z-10 drop-shadow-md" />
+            </div>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <span className="display text-2xl">{codeLabel(c.code)}</span>
-            <AgreementMeter value={c.tempC.agreement} />
+            <div className="flex items-center gap-2 rounded-md bg-white/[0.04] px-2.5 py-1 border border-white/[0.08]">
+              <span className="mono text-[11px] text-muted uppercase tracking-wider">Rain Chance</span>
+              <AgreementMeter value={c.precipProb ?? 0} color="#38bdf8" label="Rain Chance" />
+            </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 border-t border-line md:border-l md:border-t-0">
+        <div className="grid grid-cols-2 border-t border-line md:border-l md:border-t-0 backdrop-blur-sm bg-black/10">
           <MiniStat label="Wind" value={`${Math.round(u.wc(c.windKph))}`} unit={`${u.wu} ${dirName(c.windDir)}`} />
           <MiniStat label="Humidity" value={`${c.humidity}`} unit="%" />
           <MiniStat label="UV" value={`${c.uvIndex}`} unit={c.uvIndex >= 8 ? "very high" : c.uvIndex >= 3 ? "moderate" : "low"} />
@@ -445,35 +482,121 @@ function RiskRow({ r, authority, authorityUrl }: { r: Risk; authority: string; a
 
 function HourlyStrip({ hours, timezone }: { hours: Hour[]; timezone: string }) {
   const u = useUnits();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  
+  const scrollLeft = () => {
+    if (scrollRef.current) scrollRef.current.scrollBy({ left: -300, behavior: 'smooth' });
+  };
+  const scrollRight = () => {
+    if (scrollRef.current) scrollRef.current.scrollBy({ left: 300, behavior: 'smooth' });
+  };
+
   const nowTime = Date.now();
   const startIndex = Math.max(0, hours.findIndex(h => new Date(h.time).getTime() > nowTime - 3600000));
   const futureHours = hours.slice(startIndex, startIndex + 24);
   const temps = futureHours.map((h) => u.tc(h.tempC));
   const min = Math.min(...temps), max = Math.max(...temps);
-  const H = 60;
+  const H = 50; // Chart height
   const range = max - min || 1;
+
+  const colWidth = 56;
+
+  let pathD = "";
+  futureHours.forEach((h, i) => {
+    const t = u.tc(h.tempC);
+    const y = H - ((t - min) / range) * H;
+    const x = i * colWidth + (colWidth / 2);
+    if (i === 0) {
+      pathD += `M ${x},${y}`;
+    } else {
+      const prevX = (i - 1) * colWidth + (colWidth / 2);
+      const prevT = u.tc(futureHours[i - 1].tempC);
+      const prevY = H - ((prevT - min) / range) * H;
+      const cp1X = prevX + (x - prevX) / 2;
+      pathD += ` C ${cp1X},${prevY} ${cp1X},${y} ${x},${y}`;
+    }
+  });
+
   return (
-    <div className="overflow-x-auto scroll-thin">
-      <div className="flex min-w-max items-end gap-0 px-2 py-3">
-        {futureHours.map((h, i) => {
-          const d = new Date(h.time);
-          const t = u.tc(h.tempC);
-          const y = H - ((t - min) / range) * H;
-          const timeLabel = i === 0 ? "Now" : d.toLocaleTimeString('en-US', { timeZone: timezone, hour: 'numeric', hour12: true }).replace(" ", "");
-          return (
-            <div key={i} className="flex w-[46px] flex-col items-center gap-1">
-              <span className="mono text-[10px] text-muted">{Math.round(t)}°</span>
-              <div className="relative h-[60px] w-full">
-                <div className="absolute left-1/2 -translate-x-1/2 rounded-full" style={{ top: y - 3, width: 6, height: 6, backgroundColor: "var(--ink)" }} />
-              </div>
-              <div className="flex h-8 w-full items-end justify-center">
-                <div className="w-3 rounded-t-[1px]" style={{ height: `${Math.min(100, h.precipProb)}%`, backgroundColor: h.precipProb > 50 ? "var(--info)" : "var(--line-strong)", opacity: h.precipProb > 5 ? 1 : 0.3 }} title={`${h.precipProb}%`} />
-              </div>
-              <WxIcon code={h.code} size={16} style={{ color: "var(--muted)" }} />
-              <span className="mono text-[10px] text-muted">{timeLabel}</span>
-            </div>
-          );
-        })}
+    <div className="relative group">
+      {/* Navigation Buttons */}
+      <button 
+        onClick={scrollLeft} 
+        className="absolute left-2 top-1/2 z-20 -translate-y-1/2 w-8 h-8 rounded-full bg-surface/80 border border-line backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md text-ink"
+        aria-label="Scroll left"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <button 
+        onClick={scrollRight} 
+        className="absolute right-2 top-1/2 z-20 -translate-y-1/2 w-8 h-8 rounded-full bg-surface/80 border border-line backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md text-ink"
+        aria-label="Scroll right"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+
+      <div 
+        ref={scrollRef} 
+        className="overflow-x-auto scroll-smooth pb-2 pt-2 px-10 relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" 
+      >
+        <div className="relative flex items-end" style={{ width: futureHours.length * colWidth, minWidth: 'max-content' }}>
+          
+          {/* Background Highlight for "Now" */}
+          <div 
+            className="absolute top-0 bottom-0 z-0 rounded-xl backdrop-blur-sm shadow-[0_4px_24px_rgba(0,0,0,0.2)]" 
+            style={{ width: colWidth, left: 0, backgroundColor: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.1)' }} 
+          />
+
+          {/* SVG Line Chart (Absolute) */}
+          <div className="absolute left-0 w-full z-10" style={{ top: 24, height: H + 10, pointerEvents: 'none' }}>
+            <svg width="100%" height="100%" style={{ overflow: 'visible' }}>
+              <path d={pathD} fill="none" stroke="url(#tempGradient)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+              {futureHours.map((h, i) => {
+                const t = u.tc(h.tempC);
+                const y = H - ((t - min) / range) * H;
+                const x = i * colWidth + (colWidth / 2);
+                return (
+                  <g key={i}>
+                    <circle cx={x} cy={y} r="4" fill="var(--surface)" stroke="#f97316" strokeWidth="2" />
+                    <text x={x} y={y - 12} textAnchor="middle" className="mono text-[13px] font-bold" fill={i === 0 ? "var(--ink)" : "var(--muted)"}>
+                      {Math.round(t)}°
+                    </text>
+                  </g>
+                );
+              })}
+              <defs>
+                <linearGradient id="tempGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#f97316" />
+                  <stop offset="100%" stopColor="#f59e0b" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+
+          {/* Hourly Columns */}
+          <div className="flex relative z-10 w-full">
+            {futureHours.map((h, i) => {
+              const d = new Date(h.time);
+              const timeLabel = i === 0 ? "Now" : d.toLocaleTimeString('en-US', { timeZone: timezone, hour: 'numeric', hour12: true }).replace(" ", "");
+              const isNow = i === 0;
+
+              return (
+                <div key={i} className="flex flex-col items-center justify-end" style={{ width: colWidth, height: 160 }}>
+                  <div className="flex flex-col items-center justify-end flex-1 pb-2 gap-1">
+                    <WxIcon code={h.code} size={24} style={{ color: "var(--ink)" }} />
+                    <div className="h-[14px] flex items-center justify-center">
+                      <span className="text-[11px] font-bold" style={{ color: h.precipProb > 10 ? "#38bdf8" : "var(--muted)" }}>
+                        {h.precipProb}%
+                      </span>
+                    </div>
+                    <span className={`mono text-[11px] ${isNow ? 'font-bold text-ink' : 'text-muted'}`}>{timeLabel}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+        </div>
       </div>
     </div>
   );
@@ -497,7 +620,7 @@ function DailyList({ days }: { days: Day[] }) {
             <div className="flex flex-col items-center justify-center min-h-[60px]">
               <WxIcon code={d.code} size={36} style={{ color: "var(--ink)" }} />
               {d.precipProb > 20 && (
-                <span className="text-[11px] font-bold tracking-tight mt-1 flex items-center" style={{ color: "#3b82f6" }}>
+                <span className="text-[11px] font-bold tracking-tight mt-1 flex items-center" style={{ color: "#38bdf8" }}>
                   <span className="text-[9px] mr-0.5">💧</span>{d.precipProb}%
                 </span>
               )}

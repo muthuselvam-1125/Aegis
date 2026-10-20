@@ -464,22 +464,28 @@ function AddMemberForm({ places, onDone }: { places: Place[]; onDone: () => void
       <h4 className="display text-base font-semibold mb-3">Add Person to Household</h4>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <div>
-          <label className="mono text-[10px] uppercase text-muted mb-1 block">Full Name</label>
-          <input className={fieldStyle} placeholder="Name (e.g. Muthuselvam)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Full Name</label>
+          <input className={fieldStyle} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </div>
         <div>
-          <label className="mono text-[10px] uppercase text-muted mb-1 block">Role</label>
-          <input className={fieldStyle} placeholder="Role (e.g. Adult, Child, Elder, Responder)" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} />
+          <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Role</label>
+          <select className={fieldStyle} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+            <option value="adult">Adult</option>
+            <option value="child">Child</option>
+            <option value="elder">Elder</option>
+            <option value="caregiver">Caregiver</option>
+            <option value="responder">Responder</option>
+          </select>
         </div>
         <div>
-          <label className="mono text-[10px] uppercase text-muted mb-1 block">Emergency Phone Contact</label>
-          <input className={fieldStyle} placeholder="+91 98xxx xxxxx" value={form.emergencyContact} onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })} />
+          <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Emergency Phone Contact</label>
+          <input className={fieldStyle} value={form.emergencyContact} onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })} />
         </div>
       </div>
 
       {/* Location — pick a saved place, or add a brand-new one right here in the same step */}
       <div className="mt-4 border-t border-line pt-3">
-        <label className="mono text-[10px] uppercase text-muted mb-2 block">Location</label>
+        <label className="mono text-xs uppercase font-bold text-ink mb-2 block">Location</label>
         <div className="mb-3 flex gap-2">
           <button
             type="button"
@@ -510,7 +516,7 @@ function AddMemberForm({ places, onDone }: { places: Place[]; onDone: () => void
         ) : (
           <div className="rounded-md border border-line-strong bg-surface p-3">
             <div className="relative mb-3">
-              <label className="mono text-[10px] uppercase text-muted mb-1 block">Search City / Village / Address</label>
+              <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Search City / Village / Address</label>
               <input
                 type="text"
                 className={fieldStyle}
@@ -538,29 +544,28 @@ function AddMemberForm({ places, onDone }: { places: Place[]; onDone: () => void
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
-                <label className="mono text-[10px] uppercase text-muted mb-1 block">Location Name</label>
+                <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Location Name</label>
                 <input className={fieldStyle} placeholder="Name (e.g. Home, Grandma's)" value={newPlace.name} onChange={(e) => setNewPlace({ ...newPlace, name: e.target.value })} />
               </div>
               <div>
-                <label className="mono text-[10px] uppercase text-muted mb-1 block">Type</label>
+                <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Type</label>
                 <input className={fieldStyle} placeholder="Type (e.g. Home, Work, School, Farm)" value={newPlace.label} onChange={(e) => setNewPlace({ ...newPlace, label: e.target.value })} />
               </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
               <div>
-                <label className="mono text-[10px] uppercase text-muted mb-1 block">Region / State</label>
-                <input className={fieldStyle} placeholder="Region" value={newPlace.region} onChange={(e) => setNewPlace({ ...newPlace, region: e.target.value })} />
-              </div>
-              <div>
-                <label className="mono text-[10px] uppercase text-muted mb-1 block">Latitude (Auto-filled)</label>
+                <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Latitude (Auto-filled)</label>
                 <input className={fieldStyle} placeholder="Latitude" value={newPlace.lat} onChange={(e) => setNewPlace({ ...newPlace, lat: e.target.value })} />
               </div>
               <div>
-                <label className="mono text-[10px] uppercase text-muted mb-1 block">Longitude (Auto-filled)</label>
+                <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Longitude (Auto-filled)</label>
                 <input className={fieldStyle} placeholder="Longitude" value={newPlace.lon} onChange={(e) => setNewPlace({ ...newPlace, lon: e.target.value })} />
               </div>
               <div>
-                <label className="mono text-[10px] uppercase text-muted mb-1 block">Elevation (Meters)</label>
+                <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Elevation (Meters)</label>
                 <input className={fieldStyle} placeholder="Elevation m" value={newPlace.elevationM} onChange={(e) => setNewPlace({ ...newPlace, elevationM: e.target.value })} />
               </div>
             </div>
@@ -744,22 +749,28 @@ function EditMemberForm({
       <h4 className="display text-base font-semibold mb-3">Edit {member.name}</h4>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <div>
-          <label className="mono text-[10px] uppercase text-muted mb-1 block">Full Name</label>
+          <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Full Name</label>
           <input className={fieldStyle} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </div>
         <div>
-          <label className="mono text-[10px] uppercase text-muted mb-1 block">Role</label>
-          <input className={fieldStyle} placeholder="Role (e.g. Adult, Child, Elder, Responder)" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} />
+          <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Role</label>
+          <select className={fieldStyle} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+            <option value="adult">Adult</option>
+            <option value="child">Child</option>
+            <option value="elder">Elder</option>
+            <option value="caregiver">Caregiver</option>
+            <option value="responder">Responder</option>
+          </select>
         </div>
         <div>
-          <label className="mono text-[10px] uppercase text-muted mb-1 block">Emergency Phone Contact</label>
+          <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Emergency Phone Contact</label>
           <input className={fieldStyle} value={form.emergencyContact} onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })} />
         </div>
       </div>
 
       {/* Location — reassign to a saved place, or add a brand-new one right here */}
       <div className="mt-4 border-t border-line pt-3">
-        <label className="mono text-[10px] uppercase text-muted mb-2 block">Location</label>
+        <label className="mono text-xs uppercase font-bold text-ink mb-2 block">Location</label>
         <div className="mb-3 flex gap-2">
           <button
             type="button"
@@ -790,7 +801,7 @@ function EditMemberForm({
         ) : (
           <div className="rounded-md border border-line-strong bg-surface p-3">
             <div className="relative mb-3">
-              <label className="mono text-[10px] uppercase text-muted mb-1 block">Search City / Village / Address</label>
+              <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Search City / Village / Address</label>
               <input
                 type="text"
                 className={fieldStyle}
@@ -818,29 +829,28 @@ function EditMemberForm({
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
-                <label className="mono text-[10px] uppercase text-muted mb-1 block">Location Name</label>
+                <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Location Name</label>
                 <input className={fieldStyle} placeholder="Name (e.g. Home, Grandma's)" value={newPlace.name} onChange={(e) => setNewPlace({ ...newPlace, name: e.target.value })} />
               </div>
               <div>
-                <label className="mono text-[10px] uppercase text-muted mb-1 block">Type</label>
+                <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Type</label>
                 <input className={fieldStyle} placeholder="Type (e.g. Home, Work, School, Farm)" value={newPlace.label} onChange={(e) => setNewPlace({ ...newPlace, label: e.target.value })} />
               </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
               <div>
-                <label className="mono text-[10px] uppercase text-muted mb-1 block">Region / State</label>
-                <input className={fieldStyle} placeholder="Region" value={newPlace.region} onChange={(e) => setNewPlace({ ...newPlace, region: e.target.value })} />
-              </div>
-              <div>
-                <label className="mono text-[10px] uppercase text-muted mb-1 block">Latitude (Auto-filled)</label>
+                <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Latitude (Auto-filled)</label>
                 <input className={fieldStyle} placeholder="Latitude" value={newPlace.lat} onChange={(e) => setNewPlace({ ...newPlace, lat: e.target.value })} />
               </div>
               <div>
-                <label className="mono text-[10px] uppercase text-muted mb-1 block">Longitude (Auto-filled)</label>
+                <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Longitude (Auto-filled)</label>
                 <input className={fieldStyle} placeholder="Longitude" value={newPlace.lon} onChange={(e) => setNewPlace({ ...newPlace, lon: e.target.value })} />
               </div>
               <div>
-                <label className="mono text-[10px] uppercase text-muted mb-1 block">Elevation (Meters)</label>
+                <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Elevation (Meters)</label>
                 <input className={fieldStyle} placeholder="Elevation m" value={newPlace.elevationM} onChange={(e) => setNewPlace({ ...newPlace, elevationM: e.target.value })} />
               </div>
             </div>
@@ -974,7 +984,7 @@ function AddPlaceForm({ onDone }: { onDone: () => void }) {
       <h3 className="display text-lg mb-3 font-semibold">Add a new location</h3>
 
       <div className="relative mb-4">
-        <label className="mono text-[10px] uppercase text-muted mb-1 block">Search City / Village / Address (Autocomplete)</label>
+        <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Search City / Village / Address (Autocomplete)</label>
         <input
           type="text"
           className={fieldStyle}
@@ -1004,29 +1014,28 @@ function AddPlaceForm({ onDone }: { onDone: () => void }) {
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div>
-          <label className="mono text-[10px] uppercase text-muted mb-1 block">Location Label Name</label>
+          <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Location Label Name</label>
           <input className={fieldStyle} placeholder="Name (e.g. Home, Work, Grandma's)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </div>
         <div>
-          <label className="mono text-[10px] uppercase text-muted mb-1 block">Type</label>
+          <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Type</label>
           <input className={fieldStyle} placeholder="Type (e.g. Home, Work, School, Farm)" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
         </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
         <div>
-          <label className="mono text-[10px] uppercase text-muted mb-1 block">Region / State</label>
-          <input className={fieldStyle} placeholder="Region (e.g. Kerala, Tamil Nadu)" value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} />
-        </div>
-        <div>
-          <label className="mono text-[10px] uppercase text-muted mb-1 block">Latitude (Auto-filled)</label>
+          <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Latitude (Auto-filled)</label>
           <input className={fieldStyle} placeholder="Latitude" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
         </div>
         <div>
-          <label className="mono text-[10px] uppercase text-muted mb-1 block">Longitude (Auto-filled)</label>
+          <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Longitude (Auto-filled)</label>
           <input className={fieldStyle} placeholder="Longitude" value={form.lon} onChange={(e) => setForm({ ...form, lon: e.target.value })} />
         </div>
         <div>
-          <label className="mono text-[10px] uppercase text-muted mb-1 block">Elevation (Meters)</label>
+          <label className="mono text-xs uppercase font-bold text-ink mb-1.5 block">Elevation (Meters)</label>
           <input className={fieldStyle} placeholder="Elevation m" value={form.elevationM} onChange={(e) => setForm({ ...form, elevationM: e.target.value })} />
         </div>
       </div>

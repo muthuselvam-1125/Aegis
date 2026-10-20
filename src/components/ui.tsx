@@ -58,10 +58,10 @@ export function SeverityBadge({
 }
 
 /* Confidence / model-agreement meter — never a bare number. */
-export function AgreementMeter({ value, label = "model agreement" }: { value: number; label?: string }) {
+export function AgreementMeter({ value, label = "model agreement", color }: { value: number; label?: string; color?: string }) {
   const cells = 10;
   const filled = Math.round((value / 100) * cells);
-  const tone = value >= 70 ? "var(--calm)" : value >= 45 ? "var(--watch)" : "var(--warning)";
+  const tone = color ? color : (value >= 70 ? "var(--calm)" : value >= 45 ? "var(--watch)" : "var(--warning)");
   return (
     <div className="flex items-center gap-2">
       <div className="flex gap-0.5" role="meter" aria-valuenow={value} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
@@ -73,7 +73,7 @@ export function AgreementMeter({ value, label = "model agreement" }: { value: nu
           />
         ))}
       </div>
-      <span className="mono text-xs text-muted">{value}%</span>
+      <span className="mono text-xs" style={{ color: color ? color : "var(--muted)" }}>{value}%</span>
     </div>
   );
 }

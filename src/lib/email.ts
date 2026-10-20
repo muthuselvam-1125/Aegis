@@ -19,18 +19,23 @@ export async function sendAlertEmail(to: string, alertData: any) {
     },
   });
 
+  const isEmergency = severity === 'emergency' || severity === 'warning';
+  const isCalm = severity === 'calm';
+  const headerBg = isEmergency ? '#ef4444' : isCalm ? '#10b981' : '#3b82f6';
+  const headerIcon = isEmergency ? '⚠️' : isCalm ? '☀️' : 'ℹ️';
+
   const mailOptions = {
     from: `"AEGIS Alerts" <${emailUser}>`,
     to,
     subject: `[AEGIS ${severity.toUpperCase()}] ${title} in ${area}`,
     html: `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
-        <div style="background-color: ${severity === 'emergency' || severity === 'warning' ? '#ef4444' : '#f59e0b'}; padding: 15px; border-radius: 8px 8px 0 0; text-align: center;">
-          <h2 style="color: #ffffff; margin: 0; font-size: 24px;">⚠️ ${title}</h2>
+        <div style="background-color: ${headerBg}; padding: 15px; border-radius: 8px 8px 0 0; text-align: center;">
+          <h2 style="color: #ffffff; margin: 0; font-size: 24px;">${headerIcon} ${title}</h2>
         </div>
         <div style="padding: 20px;">
           <p style="font-size: 16px; color: #334155; margin-bottom: 10px;"><strong>Affected Area:</strong> ${area}</p>
-          <p style="font-size: 16px; color: #334155; margin-bottom: 20px;"><strong>Severity Level:</strong> <span style="text-transform: uppercase; font-weight: bold; color: ${severity === 'emergency' || severity === 'warning' ? '#ef4444' : '#f59e0b'};">${severity}</span></p>
+          <p style="font-size: 16px; color: #334155; margin-bottom: 20px;"><strong>Severity Level:</strong> <span style="text-transform: uppercase; font-weight: bold; color: ${headerBg};">${severity}</span></p>
           
           <div style="background-color: #f8fafc; padding: 15px; border-left: 4px solid #3b82f6; margin-bottom: 20px;">
             <p style="margin: 0; font-size: 15px; color: #1e293b;"><strong>Alert Details:</strong><br/> ${headline}</p>

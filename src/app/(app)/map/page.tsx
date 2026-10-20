@@ -291,7 +291,7 @@ export default function PerfectCleanMapPage() {
       const rawPrefs = localStorage.getItem("aegis:prefs");
       const skipQuakes = rawPrefs ? !!JSON.parse(rawPrefs).lowBandwidth : false;
       if (!skipQuakes) {
-        fetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson")
+        fetch("/api/earthquakes?format=geojson")
           .then((r) => r.json())
           .then((data) => {
             if (!data || !data.features) return;
@@ -299,17 +299,17 @@ export default function PerfectCleanMapPage() {
               const [lon, lat, depth] = feat.geometry.coordinates;
               const mag = feat.properties.mag;
               
-              // Only show earthquakes Magnitude 5.0 and above
-              if (mag < 5.0) return;
-  
+              // Show Indian seismic tremors (mag >= 2.5) and global earthquakes (mag >= 4.5)
+              if (mag < 2.5 || (!feat.properties.isIndia && mag < 4.5)) return;
+   
               const marker = L.circleMarker([lat, lon], {
                 radius: Math.max(4, mag * 2), // Slightly smaller radius to not cover nearby places visually
-                fillColor: "#a855f7",
+                fillColor: feat.properties.isIndia ? "#f97316" : "#a855f7",
                 color: "#ffffff",
                 weight: 1.5,
-                fillOpacity: 0.6,
+                fillOpacity: 0.7,
               });
-              marker.bindPopup(`<b>USGS Seismic Alert</b><br>Magnitude: M${mag}<br>Depth: ${depth}km<br>${feat.properties.place}`);
+              marker.bindPopup(`<b>${feat.properties.agency || "Seismic Alert"}</b><br>Magnitude: M${mag}<br>Depth: ${depth}km<br>${feat.properties.place}<br><small style="color:#64748b">${feat.properties.timeIST || ""}</small>`);
               layerGroupsRef.current.quakes?.addLayer(marker);
             });
           })
@@ -727,7 +727,7 @@ export default function PerfectCleanMapPage() {
             </label>
             <label className={`flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-surface-2 ${isLowBandwidth ? "opacity-50" : ""}`} title={isLowBandwidth ? "Disabled in Low-Bandwidth mode" : ""}>
               <input type="checkbox" disabled={isLowBandwidth} checked={layers.quakes && !isLowBandwidth} onChange={(e) => setLayers((s) => ({ ...s, quakes: e.target.checked }))} />
-              🌋 USGS Earthquakes
+              🌋 Seismic Telemetry (NCS & USGS)
             </label>
           </div>
         )}

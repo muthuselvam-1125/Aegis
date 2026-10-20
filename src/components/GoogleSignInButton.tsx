@@ -29,27 +29,46 @@ export function GoogleSignInButton({ label = "Continue with Google" }: { label?:
       try {
         const client = window.google.accounts.oauth2.initTokenClient({
           client_id: clientId,
-          scope: "email profile",
+          scope: "openid email profile",
           callback: async (tokenResponse: any) => {
             if (tokenResponse && tokenResponse.access_token) {
               try {
                 const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
                   headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
                 });
+                
+                if (!userInfoRes.ok) {
+                  throw new Error("Unable to retrieve Google account info. Please check your network or try again.");
+                }
+
                 const userInfo = await userInfoRes.json();
+                const userEmail = userInfo.email;
+
+                if (!userEmail) {
+                  throw new Error("Google account did not provide an email address.");
+                }
 
                 const res = await fetch("/api/auth/google", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
-                    email: userInfo.email,
-                    name: userInfo.name,
-                    avatarUrl: userInfo.picture,
+                    email: userEmail,
+                    name: userInfo.name || userEmail.split("@")[0],
+                    avatarUrl: userInfo.picture || "",
                   }),
                 });
                 
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || "Google sign-in failed");
+                let data: any = {};
+                try {
+                  const rawText = await res.text();
+                  data = rawText ? JSON.parse(rawText) : {};
+                } catch {
+                  throw new Error("Authentication server returned an invalid response.");
+                }
+
+                if (!res.ok) {
+                  throw new Error(data.error || "Google sign-in failed. Please try again.");
+                }
                 
                 if (data.isNewUser && typeof window !== "undefined") {
                   localStorage.setItem("aegis:location_setup_needed", "true");
@@ -58,6 +77,7 @@ export function GoogleSignInButton({ label = "Continue with Google" }: { label?:
                 router.push("/");
                 router.refresh();
               } catch (err: any) {
+                console.error("Google sign-in error:", err);
                 setError(err.message || "Failed to authenticate with Google");
                 setLoading(false);
               }
@@ -65,19 +85,21 @@ export function GoogleSignInButton({ label = "Continue with Google" }: { label?:
               setLoading(false);
             }
           },
-          error_callback: () => {
+          error_callback: (err: any) => {
+            console.warn("Google OAuth callback error:", err);
             setError("Google sign-in cancelled or failed");
             setLoading(false);
           },
         });
         
         client.requestAccessToken();
-      } catch (e) {
+      } catch (e: any) {
+        console.error("Google initialization error:", e);
         setError("Failed to initialize Google Sign-in");
         setLoading(false);
       }
     } else {
-      setError("Google Sign-in is not loaded yet. Please try again.");
+      setError("Google Sign-in is not loaded yet. Please refresh and try again.");
       setLoading(false);
     }
   };
