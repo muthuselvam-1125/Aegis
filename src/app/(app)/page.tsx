@@ -10,6 +10,7 @@ import { LiveGauge } from "@/components/LiveGauge";
 import { type ClimateCheck } from "@/lib/nasaPower";
 import { LocationSetupModal } from "@/components/LocationSetupModal";
 import { NewsTicker } from "@/components/NewsTicker";
+import { Droplets } from "lucide-react";
 
 export function useUnits() {
   const [isImp, setIsImp] = useState(false);
@@ -34,8 +35,8 @@ type Ensemble = { mean: number; min: number; max: number; agreement: number };
 type Cur = {
   tempC: Ensemble; feelsLikeC: number; humidity: number; dewPointC: number; pressureHpa: number;
   pressureTrend: string; visibilityKm: number; windKph: number; windDir: number; gustKph: number;
-  uvIndex: number; code: WxCode; precipitationMm?: number; rainMm?: number; precipProb?: number;
-  aqi: number; pm25: number; pm10: number; pollen: string; observedAt: string; timezone: string;
+  uvIndex: number; code: WxCode; conditionLabel?: string; cloudCover?: number; precipitationMm?: number; rainMm?: number; precipProb?: number;
+  aqi: number; pm25: number; pm10: number; pollen: string; observedAt: string; timezone: string; isDay?: number;
 };
 type Hour = { time: string; tempC: number; precipMm: number; precipProb: number; windKph: number; code: WxCode };
 type Day = { date: string; hiC: number; loC: number; precipProb: number; precipMm: number; code: WxCode; agreement: number };
@@ -149,7 +150,7 @@ export default function Today() {
 
   const c = fc.current;
   const now = new Date();
-  const isNight = now.getHours() < fc.sun.sunriseHour || now.getHours() > fc.sun.sunsetHour;
+  const isNight = c.isDay !== undefined ? c.isDay === 0 : (now.getHours() < fc.sun.sunriseHour || now.getHours() > fc.sun.sunsetHour);
   const heroHazardMode = topAlert && (topAlert.severity === "warning" || topAlert.severity === "emergency");
 
   return (
@@ -171,7 +172,7 @@ export default function Today() {
             >
               {pa && <SeverityMark severity={pa.severity} size={12} />}
               <span>{p.name.split(" — ")[0]}</span>
-              <span className="mono text-[10px] uppercase text-muted">{p.label}</span>
+              <span className="mono text-[10px] uppercase text-muted">{p.label.trim()}</span>
               {placeMembers.length > 0 && (
                 <span className="mono text-[10px] text-muted pl-1 border-l border-line ml-1">
                   👥 {placeMembers.map(m => m.name.split(' ')[0]).join(", ")}
@@ -199,7 +200,7 @@ export default function Today() {
               <div className="flex items-end gap-3">
                 <span className="display text-5xl">{Math.round(u.tc(c.tempC.mean))}°</span>
                 <div className="pb-1 text-sm text-muted">
-                  <div>{codeLabel(c.code)}</div>
+                  <div>{c.conditionLabel || codeLabel(c.code)}</div>
                   <div className="mono text-xs">feels {Math.round(u.tc(c.feelsLikeC))}°</div>
                 </div>
               </div>
@@ -333,62 +334,101 @@ export default function Today() {
 function HeroCondition({ c, place, isNight, sun }: { c: Cur; place: Place; isNight: boolean; sun: Sun }) {
   const u = useUnits();
   
-  let bgGradient = "";
-  let glowColor = "";
-  let borderColor = "";
-  let isRain = false;
+  // Real-Time Ground Observation Precedence Gate:
+  // If ground precipitation is dry or trace (<= 0.5 mm),
+  // NEVER show "Heavy Rain" or "Rain" on the Hero Card.
+  const effectivePrecip = Math.max(c.precipitationMm ?? 0, c.rainMm ?? 0);
+  const isDaytime = c.isDay !== undefined ? c.isDay === 1 : !isNight;
+  let activeCode = c.code;
+  let activeLabel = c.conditionLabel || codeLabel(c.code);
 
-  if (c.code === "rain" || c.code === "heavy-rain" || c.code === "drizzle" || c.code === "sleet") {
-    bgGradient = "linear-gradient(135deg, #111a2e 0%, #1c2738 60%, #0b0f19 100%)";
-    borderColor = "rgba(56, 189, 248, 0.2)";
-    glowColor = "rgba(56, 189, 248, 0.15)";
-    isRain = true;
-  } else if (c.code === "thunder") {
-    bgGradient = "linear-gradient(135deg, #19142b 0%, #1f1b36 60%, #0d0f17 100%)";
-    borderColor = "rgba(139, 92, 246, 0.2)";
-    glowColor = "rgba(139, 92, 246, 0.15)";
-  } else if (c.code === "clear" || c.code === "partly") {
-    bgGradient = "linear-gradient(135deg, #2a1f1a 0%, #221c1f 60%, #151214 100%)";
-    borderColor = "rgba(251, 146, 60, 0.1)";
-    glowColor = "rgba(251, 146, 60, 0.1)";
+  if (effectivePrecip <= 0.5) {
+    if (isDaytime && (c.uvIndex ?? 0) >= 6) {
+      if ((c.uvIndex ?? 0) >= 7 || (c.cloudCover !== undefined && c.cloudCover < 40) || activeCode === "clear") {
+        activeCode = "clear";
+        activeLabel = "Clear Sky";
+      } else {
+        activeCode = "partly";
+        activeLabel = "Partly Sunny";
+      }
+    } else if (activeCode === "heavy-rain" || activeCode === "rain") {
+      activeCode = (c.cloudCover !== undefined && c.cloudCover < 50) ? "partly" : "cloudy";
+      activeLabel = (c.precipProb && c.precipProb >= 60)
+        ? "Cloudy (Rain Expected Later)"
+        : (c.cloudCover && c.cloudCover > 85 ? "Overcast" : (activeCode === "partly" ? (isDaytime ? "Partly Sunny" : "Partly Cloudy") : "Cloudy"));
+    }
+
+    // Strict suppression of false "Rain Expected Later" when precipitation probability is below 60%
+    if ((c.precipProb ?? 0) < 60 && activeLabel.includes("Rain Expected Later")) {
+      activeLabel = (isDaytime && (c.uvIndex ?? 0) >= 6)
+        ? ((c.uvIndex ?? 0) >= 7 ? "Clear Sky" : "Partly Sunny")
+        : (activeCode === "clear" ? "Clear Sky" : (activeCode === "partly" ? (isDaytime ? "Partly Sunny" : "Partly Cloudy") : (c.cloudCover && c.cloudCover > 85 ? "Overcast" : "Cloudy")));
+    }
+  }
+
+  let containerBg = "";
+  let containerBorder = "";
+  let glowColor = "";
+
+  if (activeCode === "rain" || activeCode === "heavy-rain" || activeCode === "drizzle" || activeCode === "sleet") {
+    containerBg = "bg-gradient-to-br from-sky-50/95 via-blue-50/70 to-slate-50 dark:from-[#111a2e] dark:via-[#1c2738] dark:to-[#0b0f19]";
+    containerBorder = "border-sky-200/90 dark:border-sky-500/20";
+    glowColor = "rgba(56, 189, 248, 0.25)";
+  } else if (activeCode === "thunder") {
+    containerBg = "bg-gradient-to-br from-purple-50/95 via-violet-50/60 to-slate-50 dark:from-[#19142b] dark:via-[#1f1b36] dark:to-[#0d0f17]";
+    containerBorder = "border-purple-200/90 dark:border-purple-500/20";
+    glowColor = "rgba(139, 92, 246, 0.25)";
+  } else if (activeCode === "clear" || activeCode === "partly") {
+    containerBg = "bg-gradient-to-br from-amber-50/90 via-orange-50/50 to-stone-50 dark:from-[#2a1f1a] dark:via-[#221c1f] dark:to-[#151214]";
+    containerBorder = "border-amber-200/90 dark:border-orange-500/15";
+    glowColor = "rgba(251, 146, 60, 0.25)";
   } else {
     // Default / Cloudy
-    bgGradient = "linear-gradient(135deg, #16181d 0%, #1e2028 60%, #0f1115 100%)";
-    borderColor = "rgba(255, 255, 255, 0.05)";
-    glowColor = "rgba(255, 255, 255, 0.05)";
+    containerBg = "bg-gradient-to-br from-slate-100/95 via-slate-50 to-stone-50 dark:from-[#16181d] dark:via-[#1e2028] dark:to-[#0f1115]";
+    containerBorder = "border-slate-200 dark:border-white/5";
+    glowColor = "rgba(148, 163, 184, 0.2)";
   }
 
   return (
-    <Panel className="relative overflow-hidden" style={{ background: bgGradient, borderColor: borderColor, borderWidth: borderColor ? '1px' : undefined }}>
+    <Panel className={`relative overflow-hidden border shadow-sm ${containerBg} ${containerBorder}`}>
       <div className="relative z-10 grid gap-0 md:grid-cols-[1.3fr_1fr]">
         <div className="p-5 md:p-7">
-          <div className="mono text-[11px] uppercase tracking-[0.18em] text-muted">
-            {place.name} · {place.region}
-          </div>
+          {(() => {
+            const cityName = (place.name || "").split(" — ")[0].trim();
+            const regionName = (place.region || "").trim();
+            const locationSubtitle = regionName && !cityName.toLowerCase().includes(regionName.toLowerCase())
+              ? `${cityName} · ${regionName}`
+              : cityName;
+            return (
+              <div className="mono text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 font-semibold">
+                {locationSubtitle}
+              </div>
+            );
+          })()}
           <div className="mt-2 flex items-start gap-4">
             <div>
-              <div className="display leading-[0.9]" style={{ fontSize: "clamp(4.5rem, 16vw, 8rem)" }}>
+              <div className="display leading-[0.9] text-slate-900 dark:text-white font-bold" style={{ fontSize: "clamp(4.5rem, 16vw, 8rem)" }}>
                 {Math.round(u.tc(c.tempC.mean))}°
               </div>
-              <div className="mono mt-1 text-sm text-muted">
+              <div className="mono mt-1 text-sm text-slate-600 dark:text-slate-300 font-medium">
                 {Math.round(u.tc(c.tempC.min))}° / {Math.round(u.tc(c.tempC.max))}° ensemble · feels {Math.round(u.tc(c.feelsLikeC))}°
               </div>
             </div>
             <div className="relative mt-3 shrink-0">
               <div className="absolute inset-0 blur-[28px] rounded-full" style={{ background: glowColor, transform: 'scale(1.5)' }} />
-              <WxIcon code={c.code} size={64} style={{ color: "var(--ink)" }} className="relative z-10 drop-shadow-md" />
+              <WxIcon code={activeCode} size={68} className="relative z-10 drop-shadow-md" />
             </div>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <span className="display text-2xl">{codeLabel(c.code)}</span>
-            <div className="flex items-center gap-2 rounded-md bg-white/[0.04] px-2.5 py-1 border border-white/[0.08]">
-              <span className="mono text-[11px] text-muted uppercase tracking-wider">Rain Chance</span>
-              <AgreementMeter value={c.precipProb ?? 0} color="#38bdf8" label="Rain Chance" />
+            <span className="display text-2xl text-slate-900 dark:text-white font-semibold">{activeLabel}</span>
+            <div className="flex items-center gap-2 rounded-md bg-white/90 dark:bg-white/[0.04] px-2.5 py-1 border border-slate-200/90 dark:border-white/[0.08] shadow-xs">
+              <span className="mono text-[11px] text-slate-600 dark:text-slate-400 uppercase tracking-wider font-semibold">Rain Chance</span>
+              <AgreementMeter value={c.precipProb ?? 0} color="#0284c7" label="Rain Chance" />
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 border-t border-line md:border-l md:border-t-0 backdrop-blur-sm bg-black/10">
-          <MiniStat label="Wind" value={`${Math.round(u.wc(c.windKph))}`} unit={`${u.wu} ${dirName(c.windDir)}`} />
+        <div className="grid grid-cols-2 border-t border-slate-200/80 md:border-l md:border-t-0 md:border-slate-200/80 dark:border-line backdrop-blur-sm bg-white/40 dark:bg-black/10">
+          <MiniStat label="Wind" value={`${Math.round(u.wc(c.windKph))}`} unit={`${u.wu} ${dirName(c.windDir)}`} deg={c.windDir} />
           <MiniStat label="Humidity" value={`${c.humidity}`} unit="%" />
           <MiniStat label="UV" value={`${c.uvIndex}`} unit={c.uvIndex >= 8 ? "very high" : c.uvIndex >= 3 ? "moderate" : "low"} />
           <MiniStat label="Air" value={`${c.aqi}`} unit={aqiCategory(c.aqi).label} sev={aqiCategory(c.aqi).severity as Severity} />
@@ -410,7 +450,7 @@ function HeroHazard({ alert, place }: { alert: AlertT; place: Place }) {
         <span className="ml-auto mono text-xs">{place.name.split(" — ")[0]}</span>
       </div>
       <div className="bg-surface p-5 md:p-7">
-        <h1 className="display text-3xl leading-tight md:text-4xl">{alert.title}</h1>
+        <h1 className="display text-3xl leading-tight md:text-4xl text-slate-900 dark:text-white font-bold">{alert.title}</h1>
         <p className="mt-2 max-w-2xl text-base text-ink-2">{alert.headline}</p>
         <div className="mt-4 rounded-sm border-l-4 bg-surface-2 p-3" style={{ borderColor: tint }}>
           <div className="mono text-[10px] uppercase tracking-[0.16em] text-muted">Do this now</div>
@@ -428,12 +468,26 @@ function HeroHazard({ alert, place }: { alert: AlertT; place: Place }) {
   );
 }
 
-function MiniStat({ label, value, unit, sev }: { label: string; value: string; unit?: string; sev?: Severity }) {
+function MiniStat({ label, value, unit, sev, deg }: { label: string; value: string; unit?: string; sev?: Severity; deg?: number }) {
   return (
-    <div className="border-b border-line px-4 py-3 [&:nth-child(even)]:border-l">
-      <div className="mono text-[10px] uppercase tracking-[0.16em] text-muted">{label}</div>
-      <div className="display text-3xl">{value}</div>
-      <div className="text-xs" style={{ color: sev ? `var(--${sev})` : "var(--muted)" }}>{unit}</div>
+    <div className="border-b border-slate-200/80 dark:border-line px-4 py-3 [&:nth-child(even)]:border-l [&:nth-child(even)]:border-slate-200/80 dark:[&:nth-child(even)]:border-line [&:nth-child(n+3)]:border-b-0">
+      <div className="mono text-[10px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400 font-semibold">{label}</div>
+      <div className="display text-3xl text-slate-900 dark:text-white font-bold">{value}</div>
+      <div className="text-xs font-semibold flex items-center gap-1.5" style={{ color: sev ? `var(--${sev})` : undefined }}>
+        {deg !== undefined && (
+          <span
+            className="inline-block transition-transform duration-500 text-slate-700 dark:text-slate-300 shrink-0"
+            style={{ transform: `rotate(${deg}deg)` }}
+            title={`Wind direction: ${deg}° (${dirName(deg)})`}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="19" x2="12" y2="5" />
+              <polyline points="5 12 12 5 19 12" />
+            </svg>
+          </span>
+        )}
+        {sev ? unit : <span className="text-slate-600 dark:text-slate-300 font-medium">{unit}</span>}
+      </div>
     </div>
   );
 }
@@ -583,7 +637,7 @@ function HourlyStrip({ hours, timezone }: { hours: Hour[]; timezone: string }) {
               return (
                 <div key={i} className="flex flex-col items-center justify-end" style={{ width: colWidth, height: 160 }}>
                   <div className="flex flex-col items-center justify-end flex-1 pb-2 gap-1">
-                    <WxIcon code={h.code} size={24} style={{ color: "var(--ink)" }} />
+                    <WxIcon code={h.code} size={24} />
                     <div className="h-[14px] flex items-center justify-center">
                       <span className="text-[11px] font-bold" style={{ color: h.precipProb > 10 ? "#38bdf8" : "var(--muted)" }}>
                         {h.precipProb}%
@@ -617,18 +671,25 @@ function DailyList({ days }: { days: Day[] }) {
               {isToday ? "Today" : new Date(d.date).toLocaleDateString([], { weekday: "short" })}
             </span>
             
-            <div className="flex flex-col items-center justify-center min-h-[60px]">
-              <WxIcon code={d.code} size={36} style={{ color: "var(--ink)" }} />
-              {d.precipProb > 20 && (
-                <span className="text-[11px] font-bold tracking-tight mt-1 flex items-center" style={{ color: "#38bdf8" }}>
-                  <span className="text-[9px] mr-0.5">💧</span>{d.precipProb}%
-                </span>
-              )}
+            <div className="flex flex-col items-center justify-center min-h-[66px]">
+              <WxIcon code={d.code} size={40} className="transition-transform duration-200 hover:scale-105" />
+              <div className="h-[18px] flex items-center justify-center mt-1">
+                {d.precipProb > 20 ? (
+                  <span className="text-[11px] font-bold tracking-tight flex items-center text-sky-600 dark:text-sky-400">
+                    <Droplets size={11} className="mr-0.5 inline text-sky-500 dark:text-sky-400 stroke-[2.2]" />
+                    {d.precipProb}%
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-medium text-transparent select-none" aria-hidden="true">
+                    0%
+                  </span>
+                )}
+              </div>
             </div>
             
             <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-base font-bold text-ink">{Math.round(u.tc(d.hiC))}°</span>
-              <span className="text-sm font-semibold text-muted">{Math.round(u.tc(d.loC))}°</span>
+              <span className="text-base font-bold text-slate-900 dark:text-white">{Math.round(u.tc(d.hiC))}°</span>
+              <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">{Math.round(u.tc(d.loC))}°</span>
             </div>
           </div>
         );
@@ -653,7 +714,6 @@ function SunMoonTracker({ sun, timezone, className = "" }: { sun: Sun; timezone:
   let progress = 0;
   let labelLeft = "";
   let labelRight = "";
-  let emoji = "";
 
   if (isDay) {
     const totalDay = sunsetHour - sunriseHour;
@@ -661,7 +721,6 @@ function SunMoonTracker({ sun, timezone, className = "" }: { sun: Sun; timezone:
     progress = Math.max(0, Math.min(1, progress));
     labelLeft = `Sunrise ${fmtHour(sunriseHour)}`;
     labelRight = `Sunset ${fmtHour(sunsetHour)}`;
-    emoji = "☀️";
   } else {
     const nightDuration = (24 - sunsetHour) + sunriseHour;
     if (currentFloat >= sunsetHour) {
@@ -672,7 +731,6 @@ function SunMoonTracker({ sun, timezone, className = "" }: { sun: Sun; timezone:
     progress = Math.max(0, Math.min(1, progress));
     labelLeft = `Sunset ${fmtHour(sunsetHour)}`;
     labelRight = `Sunrise ${fmtHour(sunriseHour)}`;
-    emoji = "🌙";
   }
 
   const angle = Math.PI - (progress * Math.PI);
@@ -686,12 +744,53 @@ function SunMoonTracker({ sun, timezone, className = "" }: { sun: Sun; timezone:
     <Panel className={className}>
       <PanelHeader kicker="Live tracker" title={isDay ? "Sun Position" : "Moon Position"} />
       <div className="px-4 py-5 flex flex-col items-center relative overflow-hidden">
-        <svg viewBox="0 0 100 55" className="w-full max-w-[280px] overflow-visible">
-          <path d="M 10,50 A 40,40 0 0,1 90,50" fill="none" stroke="var(--line-strong)" strokeWidth="1.5" strokeDasharray="2 3" />
+        <svg viewBox="0 0 100 62" className="w-full max-w-[280px] overflow-visible">
+          <defs>
+            <linearGradient id="aegisSunGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#f59e0b" />
+              <stop offset="100%" stopColor="#d97706" />
+            </linearGradient>
+            <filter id="aegisNodeGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" />
+            </filter>
+          </defs>
+
+          {/* Base Trajectory Track */}
+          <path d="M 10,50 A 40,40 0 0,1 90,50" fill="none" stroke="var(--line-strong)" strokeWidth="1.5" strokeDasharray="2 3" opacity="0.6" />
+          
+          {/* Horizon Line & Ground Anchors */}
           <line x1="0" y1="50" x2="100" y2="50" stroke="var(--line)" strokeWidth="1" />
-          <text x={x} y={y} fontSize="14" textAnchor="middle" dominantBaseline="central" style={{ filter: "drop-shadow(0px 1px 3px rgba(0,0,0,0.3))" }}>
-            {emoji}
-          </text>
+          <circle cx="10" cy="50" r="1.5" fill="var(--muted)" />
+          <circle cx="90" cy="50" r="1.5" fill="var(--muted)" />
+
+          {/* Proprietary Aegis Celestial Vector Instrument */}
+          {isDay ? (
+            <g transform={`translate(${x}, ${y})`}>
+              {/* Outer atmospheric aura */}
+              <circle r="7.5" fill="#f59e0b" opacity="0.22" filter="url(#aegisNodeGlow)" />
+              {/* Target reticle ring */}
+              <circle r="5.2" fill="none" stroke="#f59e0b" strokeWidth="1" strokeDasharray="1.5 1.5" opacity="0.85" />
+              {/* Precision Core */}
+              <circle r="3.2" fill="url(#aegisSunGrad)" stroke="#ffffff" strokeWidth="0.8" />
+              {/* Coordinate crosshair ticks */}
+              <line x1="-7" y1="0" x2="-4.8" y2="0" stroke="#f59e0b" strokeWidth="0.8" strokeLinecap="round" />
+              <line x1="4.8" y1="0" x2="7" y2="0" stroke="#f59e0b" strokeWidth="0.8" strokeLinecap="round" />
+              <line x1="0" y1="-7" x2="0" y2="-4.8" stroke="#f59e0b" strokeWidth="0.8" strokeLinecap="round" />
+              <line x1="0" y1="4.8" x2="0" y2="7" stroke="#f59e0b" strokeWidth="0.8" strokeLinecap="round" />
+            </g>
+          ) : (
+            <g transform={`translate(${x}, ${y})`}>
+              {/* Lunar aura */}
+              <circle r="6.5" fill="#60a5fa" opacity="0.25" filter="url(#aegisNodeGlow)" />
+              {/* Precision crescent glyph */}
+              <path
+                d="M -1.2 -3.8 A 4.2 4.2 0 0 0 3.2 3.2 A 3.4 3.4 0 1 1 -1.2 -3.8 Z"
+                fill="#93c5fd"
+                stroke="#ffffff"
+                strokeWidth="0.6"
+              />
+            </g>
+          )}
         </svg>
         <div className="w-full max-w-[280px] flex justify-between mt-3 mono text-[10px] uppercase text-muted tracking-wider">
           <span>{labelLeft}</span>

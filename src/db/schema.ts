@@ -114,12 +114,22 @@ export const checklist = pgTable("checklist", {
   sortOrder: integer("sort_order").notNull().default(0),
 });
 
+/* Multi-tenant checklist progress per authenticated user/household */
+export const userChecklistProgress = pgTable("user_checklist_progress", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  checklistId: integer("checklist_id").notNull(),
+  done: boolean("done").notNull().default(false),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export type Place = typeof places.$inferSelect;
 export type Member = typeof members.$inferSelect;
 export type Alert = typeof alerts.$inferSelect;
 export type Report = typeof reports.$inferSelect;
 export type Resource = typeof resources.$inferSelect;
 export type ChecklistItem = typeof checklist.$inferSelect;
+export type UserChecklistProgress = typeof userChecklistProgress.$inferSelect;
 
 
 /* ================= AUTHENTICATION ================= */

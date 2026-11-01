@@ -32,10 +32,13 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session || !session.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const body = await req.json();
     const { id, ...data } = body;
     if (!id) return NextResponse.json({ error: "Missing member id" }, { status: 400 });
-    const updated = await updateMember(Number(id), data);
+    const updated = await updateMember(Number(id), data, session.userId);
+    if (!updated) return NextResponse.json({ error: "Member not found or unauthorized" }, { status: 404 });
     return NextResponse.json(updated);
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
@@ -44,12 +47,17 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session || !session.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "Missing member id" }, { status: 400 });
-    await deleteMember(Number(id));
+    const deleted = await deleteMember(Number(id), session.userId);
+    if (!deleted) return NextResponse.json({ error: "Member not found or unauthorized" }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
+
+

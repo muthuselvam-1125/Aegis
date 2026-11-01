@@ -58,24 +58,48 @@ export default function PlacesPage() {
   }, []);
 
   const loadMembers = async () => {
-    const cached = localStorage.getItem("aegis:offline_members");
-    if (cached) setMembers(JSON.parse(cached));
     try {
-      const d = await fetch("/api/checkin", { cache: 'no-store' }).then((r) => r.json());
-      setMembers(d.members || []);
-      localStorage.setItem("aegis:offline_members", JSON.stringify(d.members || []));
+      const cached = typeof window !== "undefined" ? localStorage.getItem("aegis:offline_members") : null;
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) setMembers(parsed);
+      }
+    } catch {
+      // Safe fallback if JSON parsing fails or storage restricted
+    }
+    try {
+      const res = await fetch("/api/checkin", { cache: "no-store" });
+      if (res.ok) {
+        const d = await res.json();
+        setMembers(d?.members || []);
+        try {
+          localStorage.setItem("aegis:offline_members", JSON.stringify(d?.members || []));
+        } catch {}
+      }
     } catch (e) {
       console.warn("Offline mode active for members.");
     }
   };
 
   const loadPlaces = async () => {
-    const cached = localStorage.getItem("aegis:offline_places");
-    if (cached) setPlaces(JSON.parse(cached));
     try {
-      const d = await fetch("/api/places", { cache: 'no-store' }).then((r) => r.json());
-      setPlaces(d.places || []);
-      localStorage.setItem("aegis:offline_places", JSON.stringify(d.places || []));
+      const cached = typeof window !== "undefined" ? localStorage.getItem("aegis:offline_places") : null;
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) setPlaces(parsed);
+      }
+    } catch {
+      // Safe fallback if JSON parsing fails or storage restricted
+    }
+    try {
+      const res = await fetch("/api/places", { cache: "no-store" });
+      if (res.ok) {
+        const d = await res.json();
+        setPlaces(d?.places || []);
+        try {
+          localStorage.setItem("aegis:offline_places", JSON.stringify(d?.places || []));
+        } catch {}
+      }
     } catch (e) {
       console.warn("Offline mode active for places.");
     }
@@ -84,7 +108,23 @@ export default function PlacesPage() {
   useEffect(() => {
     loadMembers();
     loadPlaces();
-    fetch("/api/alerts", { cache: 'no-store' }).then((r) => r.json()).then((d) => setAlerts(d.alerts || []));
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    fetch("/api/alerts", { cache: "no-store", signal: controller.signal })
+      .then((r) => {
+        if (!r.ok) return { alerts: [] };
+        return r.json();
+      })
+      .then((d) => setAlerts(d?.alerts || []))
+      .catch(() => setAlerts([]))
+      .finally(() => clearTimeout(timeoutId));
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, []);
 
   const checkIn = async (id: number, status: string, note = "") => {
@@ -129,10 +169,19 @@ export default function PlacesPage() {
 
   const removePlace = async (id: number, name: string) => {
     if (!window.confirm(`Remove "${name}" from saved places? Any household members assigned there will become unassigned. This can't be undone.`)) return;
-    await fetch(`/api/places?id=${id}`, { method: "DELETE" });
-    loadPlaces();
-    loadMembers();
-    pingDataChanged();
+    try {
+      const res = await fetch(`/api/places?id=${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setFormError(errData.error || `Failed to remove place (${res.status})`);
+        return;
+      }
+      loadPlaces();
+      loadMembers();
+      pingDataChanged();
+    } catch (e: any) {
+      setFormError(e.message || "Failed to remove place.");
+    }
   };
 
   const needHelp = members.filter((m) => m.status === "needs_help");
@@ -151,8 +200,8 @@ export default function PlacesPage() {
         <div className="mb-4 flex items-center gap-3 rounded-md border-2 px-4 py-3 bg-surface" style={{ borderColor: "var(--warning)" }}>
           <IconAlertTri size={22} style={{ color: "var(--warning)" }} />
           <div className="text-sm">
-            <span className="font-semibold">{needHelp.map((m) => m.name).join(", ")}</span> marked needing help.
-            {needHelp[0].statusNote && <span className="text-muted"> — “{needHelp[0].statusNote}”</span>}
+            <span className="font-semibold">{needHelp.map((m) => m?.name || "Unknown").join(", ")}</span> marked needing help.
+            {needHelp[0]?.statusNote && <span className="text-muted"> — “{needHelp[0].statusNote}”</span>}
           </div>
         </div>
       )}
@@ -189,25 +238,25 @@ export default function PlacesPage() {
 
         <ul className="divide-y divide-line">
           {members.map((m) => {
-            const place = places.find((p) => p.id === m.placeId);
-            const meta = STATUS_META[m.status] ?? STATUS_META.unknown;
+            const place = places.find((p) => p?.id === m?.placeId);
+            const meta = STATUS_META[m?.status] ?? STATUS_META.unknown;
             const isEditing = editingId === m.id;
             return (
               <li key={m.id}>
                 <div className="flex flex-wrap items-center justify-between gap-3 p-4">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-3 font-semibold text-lg">
-                      {m.name[0]}
+                      {m?.name?.[0] || "?"}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-base">{m.name}</span>
-                        <span className="mono text-[10px] uppercase text-muted bg-surface-2 px-1.5 py-0.5 rounded">{m.role}</span>
+                        <span className="font-semibold text-base">{m?.name || "Unknown"}</span>
+                        <span className="mono text-[10px] uppercase text-muted bg-surface-2 px-1.5 py-0.5 rounded">{m?.role || "adult"}</span>
                       </div>
                       <div className="text-xs text-muted mt-0.5">
-                        Location: <span className="text-ink font-medium">{place?.name.split(" — ")[0] ?? "Unassigned"}</span>
-                        {m.emergencyContact && ` · Contact: ${m.emergencyContact}`}
-                        {m.statusNote && ` · Note: “${m.statusNote}”`}
+                        Location: <span className="text-ink font-medium">{place?.name ? place.name.split(" — ")[0].trim() : "Unassigned"}</span>
+                        {m?.emergencyContact && ` · Contact: ${m.emergencyContact}`}
+                        {m?.statusNote && ` · Note: “${m.statusNote}”`}
                       </div>
                     </div>
                   </div>
@@ -277,24 +326,34 @@ export default function PlacesPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         {places.map((p) => {
-          const pa = alerts.filter((a) => a.placeId === p.id && a.active !== false && (!a.expires || new Date(a.expires).getTime() > Date.now())).sort((x, y) => (x.severity === "emergency" ? -1 : 1))[0];
+          const pa = alerts
+            .filter((a) => a?.placeId === p?.id && a?.active !== false && (!a?.expires || new Date(a.expires).getTime() > Date.now()))
+            .sort((x, y) => (x.severity === "emergency" ? -1 : 1))[0];
+
+          const pureCityName = (p?.name || "").split(" — ")[0].trim() || p?.name || "Unknown Location";
+          const regionName = (p?.region || "").trim();
+          const showRegion = regionName && !pureCityName.toLowerCase().includes(regionName.toLowerCase());
+
           return (
             <Panel key={p.id} className="p-4">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <span className="mono text-[10px] uppercase text-muted">{p.label}</span>
-                  <h3 className="display text-lg font-semibold">{p.name}</h3>
-                  <div className="mono text-xs text-muted">{p.lat.toFixed(3)}°N, {p.lon.toFixed(3)}°E · {p.region}</div>
-                  {members.filter(m => m.placeId === p.id).length > 0 && (
+                  <span className="mono text-[10px] uppercase text-muted">{p?.label || "place"}</span>
+                  <h3 className="display text-lg font-semibold">{pureCityName}</h3>
+                  <div className="mono text-xs text-muted">
+                    {Number(p?.lat || 0).toFixed(3)}°N, {Number(p?.lon || 0).toFixed(3)}°E
+                    {showRegion ? ` · ${regionName}` : ""}
+                  </div>
+                  {members.filter(m => m?.placeId === p?.id).length > 0 && (
                     <div className="mt-2 text-xs text-ink-2 font-medium bg-surface-2 inline-block px-2 py-1 rounded-sm border border-line">
-                      👥 {members.filter(m => m.placeId === p.id).map(m => m.name).join(", ")}
+                      👥 {members.filter(m => m?.placeId === p?.id).map(m => m?.name || "Unknown").join(", ")}
                     </div>
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   {pa && <SeverityBadge severity={pa.severity} label={pa.severity.toUpperCase()} size="sm" />}
                   <button
-                    onClick={() => removePlace(p.id, p.name)}
+                    onClick={() => removePlace(p.id, pureCityName)}
                     className="rounded-sm border border-line bg-surface-2 px-2 py-1 text-[11px] text-muted hover:bg-surface-3 hover:text-ink"
                   >
                     Remove
@@ -304,15 +363,15 @@ export default function PlacesPage() {
 
               <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
                 <div className="rounded-sm bg-surface-2 p-2">
-                  <div className="display text-base">{p.elevationM}m</div>
+                  <div className="display text-base">{p?.elevationM ?? 0}m</div>
                   <div className="text-[10px] text-muted">Elevation</div>
                 </div>
                 <div className="rounded-sm bg-surface-2 p-2">
-                  <div className="display text-base">{p.coastalKm}km</div>
+                  <div className="display text-base">{p?.coastalKm ?? 0}km</div>
                   <div className="text-[10px] text-muted">Coast</div>
                 </div>
                 <div className="rounded-sm bg-surface-2 p-2">
-                  <div className="display text-base">{p.floodHistory}</div>
+                  <div className="display text-base">{p?.floodHistory ?? 0}</div>
                   <div className="text-[10px] text-muted">Floods/10y</div>
                 </div>
               </div>
@@ -379,19 +438,40 @@ function AddMemberForm({ places, onDone }: { places: Place[]; onDone: () => void
     return () => clearTimeout(timer);
   }, [searchQuery, placeMode]);
 
-  const selectSuggestion = (item: GeocodingResult) => {
-    const fullName = `${item.name}${item.admin1 ? " — " + item.admin1 : ""}`;
+  const selectSuggestion = async (item: GeocodingResult) => {
+    const cityName = item.name.trim();
+    const regionName = item.admin1?.trim() || "";
+    const fullName = regionName ? `${cityName} — ${regionName}` : cityName;
+    let elev = item.elevation != null ? Math.round(item.elevation).toString() : "";
+
     setNewPlace((prev) => ({
       ...prev,
       name: fullName,
-      region: item.admin1 || prev.region,
+      region: regionName || prev.region,
       country: item.country || prev.country,
       lat: item.latitude.toFixed(4),
       lon: item.longitude.toFixed(4),
-      elevationM: item.elevation != null ? Math.round(item.elevation).toString() : prev.elevationM,
+      elevationM: elev || prev.elevationM,
     }));
     setSearchQuery("");
     setSuggestions([]);
+
+    if (!elev || elev === "0" || elev === "10") {
+      try {
+        const res = await fetch(
+          `https://api.open-meteo.com/v1/elevation?latitude=${item.latitude}&longitude=${item.longitude}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.elevation) && typeof data.elevation[0] === "number") {
+            const authenticElev = Math.round(data.elevation[0]).toString();
+            setNewPlace((prev) => ({ ...prev, elevationM: authenticElev }));
+          }
+        }
+      } catch (err) {
+        console.warn("Elevation lookup failed", err);
+      }
+    }
   };
 
   const submit = async () => {
@@ -410,6 +490,7 @@ function AddMemberForm({ places, onDone }: { places: Place[]; onDone: () => void
 
     submittingRef.current = true;
     setBusy(true);
+    setFormError("");
 
     let placeId: number | null = placeMode === "existing" ? (form.placeId ? Number(form.placeId) : null) : null;
 
@@ -419,7 +500,7 @@ function AddMemberForm({ places, onDone }: { places: Place[]; onDone: () => void
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: newPlace.name,
+            name: newPlace.name.split(" — ")[0].trim(),
             label: newPlace.label,
             region: newPlace.region,
             country: newPlace.country,
@@ -429,33 +510,62 @@ function AddMemberForm({ places, onDone }: { places: Place[]; onDone: () => void
             coastalKm: Number(newPlace.coastalKm),
             floodHistory: Number(newPlace.floodHistory),
           }),
-        }).then((r) => r.json());
-        placeId = placeRes?.place?.id ?? null;
-      } catch (err) {
-        console.warn("Inline place creation failed", err);
+        });
+
+        if (!placeRes.ok) {
+          const errData = await placeRes.json().catch(() => ({}));
+          setFormError(errData.error || `Failed to create location (${placeRes.status})`);
+          submittingRef.current = false;
+          setBusy(false);
+          return;
+        }
+
+        const placeJson = await placeRes.json();
+        placeId = placeJson?.place?.id ?? null;
+      } catch (err: any) {
+        setFormError(err.message || "Failed to create location. Please check your connection.");
+        submittingRef.current = false;
+        setBusy(false);
+        return;
       }
     }
 
-    await fetch("/api/checkin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "create",
-        name: form.name,
-        role: form.role,
-        placeId,
-        bloodType: form.bloodType,
-        allergies: form.allergies,
-        emergencyContact: form.emergencyContact,
-        status: "safe",
-      }),
-    });
+    try {
+      const memberRes = await fetch("/api/checkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          name: form.name.trim(),
+          role: form.role,
+          placeId,
+          bloodType: form.bloodType,
+          allergies: form.allergies,
+          emergencyContact: form.emergencyContact,
+          status: "safe",
+        }),
+      });
+
+      if (!memberRes.ok) {
+        const errData = await memberRes.json().catch(() => ({}));
+        setFormError(errData.error || `Failed to add household member (${memberRes.status})`);
+        submittingRef.current = false;
+        setBusy(false);
+        return;
+      }
+    } catch (err: any) {
+      setFormError(err.message || "Failed to add member. Please check your connection.");
+      submittingRef.current = false;
+      setBusy(false);
+      return;
+    }
 
     pingDataChanged();
     submittingRef.current = false;
     setBusy(false);
     onDone();
   };
+
 
   const fieldStyle = "w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm focus:border-ink focus:outline-none";
 
@@ -655,19 +765,40 @@ function EditMemberForm({
     return () => clearTimeout(timer);
   }, [searchQuery, placeMode]);
 
-  const selectSuggestion = (item: GeocodingResult) => {
-    const fullName = `${item.name}${item.admin1 ? " — " + item.admin1 : ""}`;
+  const selectSuggestion = async (item: GeocodingResult) => {
+    const cityName = item.name.trim();
+    const regionName = item.admin1?.trim() || "";
+    const fullName = regionName ? `${cityName} — ${regionName}` : cityName;
+    let elev = item.elevation != null ? Math.round(item.elevation).toString() : "";
+
     setNewPlace((prev) => ({
       ...prev,
       name: fullName,
-      region: item.admin1 || prev.region,
+      region: regionName || prev.region,
       country: item.country || prev.country,
       lat: item.latitude.toFixed(4),
       lon: item.longitude.toFixed(4),
-      elevationM: item.elevation != null ? Math.round(item.elevation).toString() : prev.elevationM,
+      elevationM: elev || prev.elevationM,
     }));
     setSearchQuery("");
     setSuggestions([]);
+
+    if (!elev || elev === "0" || elev === "10") {
+      try {
+        const res = await fetch(
+          `https://api.open-meteo.com/v1/elevation?latitude=${item.latitude}&longitude=${item.longitude}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.elevation) && typeof data.elevation[0] === "number") {
+            const authenticElev = Math.round(data.elevation[0]).toString();
+            setNewPlace((prev) => ({ ...prev, elevationM: authenticElev }));
+          }
+        }
+      } catch (err) {
+        console.warn("Elevation lookup failed", err);
+      }
+    }
   };
 
   const save = async () => {
@@ -684,6 +815,7 @@ function EditMemberForm({
 
     savingRef.current = true;
     setBusy(true);
+    setFormError("");
 
     let placeId: number | null = placeMode === "existing" ? (form.placeId ? Number(form.placeId) : null) : null;
 
@@ -693,7 +825,7 @@ function EditMemberForm({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: newPlace.name,
+            name: newPlace.name.split(" — ")[0].trim(),
             label: newPlace.label,
             region: newPlace.region,
             country: newPlace.country,
@@ -703,26 +835,54 @@ function EditMemberForm({
             coastalKm: Number(newPlace.coastalKm),
             floodHistory: Number(newPlace.floodHistory),
           }),
-        }).then((r) => r.json());
-        placeId = placeRes?.place?.id ?? null;
-      } catch (err) {
-        console.warn("Inline place creation failed", err);
+        });
+
+        if (!placeRes.ok) {
+          const errData = await placeRes.json().catch(() => ({}));
+          setFormError(errData.error || `Failed to create location (${placeRes.status})`);
+          savingRef.current = false;
+          setBusy(false);
+          return;
+        }
+
+        const placeJson = await placeRes.json();
+        placeId = placeJson?.place?.id ?? null;
+      } catch (err: any) {
+        setFormError(err.message || "Failed to create location. Please check your connection.");
+        savingRef.current = false;
+        setBusy(false);
+        return;
       }
     }
 
-    await fetch("/api/checkin", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: member.id,
-        name: form.name,
-        role: form.role,
-        placeId,
-        bloodType: form.bloodType,
-        allergies: form.allergies,
-        emergencyContact: form.emergencyContact,
-      }),
-    });
+    try {
+      const patchRes = await fetch("/api/checkin", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: member.id,
+          name: form.name.trim(),
+          role: form.role,
+          placeId,
+          bloodType: form.bloodType,
+          allergies: form.allergies,
+          emergencyContact: form.emergencyContact,
+        }),
+      });
+
+      if (!patchRes.ok) {
+        const errData = await patchRes.json().catch(() => ({}));
+        setFormError(errData.error || `Failed to update member (${patchRes.status})`);
+        savingRef.current = false;
+        setBusy(false);
+        return;
+      }
+    } catch (err: any) {
+      setFormError(err.message || "Failed to update member. Please check your connection.");
+      savingRef.current = false;
+      setBusy(false);
+      return;
+    }
 
     pingDataChanged();
     savingRef.current = false;
@@ -735,12 +895,28 @@ function EditMemberForm({
     if (!window.confirm(`Remove ${member.name} from the household? This can't be undone.`)) return;
     removingRef.current = true;
     setRemoving(true);
-    await fetch(`/api/checkin?id=${member.id}`, { method: "DELETE" });
+    setFormError("");
+    try {
+      const res = await fetch(`/api/checkin?id=${member.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setFormError(errData.error || `Failed to remove member (${res.status})`);
+        removingRef.current = false;
+        setRemoving(false);
+        return;
+      }
+    } catch (err: any) {
+      setFormError(err.message || "Failed to remove member.");
+      removingRef.current = false;
+      setRemoving(false);
+      return;
+    }
     pingDataChanged();
     removingRef.current = false;
     setRemoving(false);
     onDone();
   };
+
 
   const fieldStyle = "w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm focus:border-ink focus:outline-none";
 
@@ -930,19 +1106,40 @@ function AddPlaceForm({ onDone }: { onDone: () => void }) {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const selectSuggestion = (item: GeocodingResult) => {
-    const fullName = `${item.name}${item.admin1 ? " — " + item.admin1 : ""}`;
+  const selectSuggestion = async (item: GeocodingResult) => {
+    const cityName = item.name.trim();
+    const regionName = item.admin1?.trim() || "";
+    const fullName = regionName ? `${cityName} — ${regionName}` : cityName;
+    let elev = item.elevation != null ? Math.round(item.elevation).toString() : "";
+
     setForm((prev) => ({
       ...prev,
       name: fullName,
-      region: item.admin1 || prev.region,
+      region: regionName || prev.region,
       country: item.country || prev.country,
       lat: item.latitude.toFixed(4),
       lon: item.longitude.toFixed(4),
-      elevationM: item.elevation != null ? Math.round(item.elevation).toString() : prev.elevationM,
+      elevationM: elev || prev.elevationM,
     }));
     setSearchQuery("");
     setSuggestions([]);
+
+    if (!elev || elev === "0" || elev === "10") {
+      try {
+        const res = await fetch(
+          `https://api.open-meteo.com/v1/elevation?latitude=${item.latitude}&longitude=${item.longitude}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.elevation) && typeof data.elevation[0] === "number") {
+            const authenticElev = Math.round(data.elevation[0]).toString();
+            setForm((prev) => ({ ...prev, elevationM: authenticElev }));
+          }
+        }
+      } catch (err) {
+        console.warn("Elevation lookup failed", err);
+      }
+    }
   };
 
   const submit = async () => {
@@ -956,26 +1153,45 @@ function AddPlaceForm({ onDone }: { onDone: () => void }) {
     
     submittingRef.current = true;
     setBusy(true);
-    await fetch("/api/places", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: form.name,
-        label: form.label,
-        region: form.region,
-        country: form.country,
-        lat: Number(form.lat),
-        lon: Number(form.lon),
-        elevationM: Number(form.elevationM),
-        coastalKm: Number(form.coastalKm),
-        floodHistory: Number(form.floodHistory),
-      }),
-    });
+    setFormError("");
+
+    try {
+      const res = await fetch("/api/places", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name.split(" — ")[0].trim(),
+          label: form.label,
+          region: form.region,
+          country: form.country,
+          lat: Number(form.lat),
+          lon: Number(form.lon),
+          elevationM: Number(form.elevationM),
+          coastalKm: Number(form.coastalKm),
+          floodHistory: Number(form.floodHistory),
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setFormError(errData.error || `Failed to save place (${res.status})`);
+        submittingRef.current = false;
+        setBusy(false);
+        return;
+      }
+    } catch (err: any) {
+      setFormError(err.message || "Failed to save place. Please check your connection.");
+      submittingRef.current = false;
+      setBusy(false);
+      return;
+    }
+
     pingDataChanged();
     submittingRef.current = false;
     setBusy(false);
     onDone();
   };
+
 
   const fieldStyle = "w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm focus:border-ink focus:outline-none";
 

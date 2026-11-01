@@ -312,7 +312,12 @@ export async function fetchNewsForPlaces(places: any[], activePlaceId?: number |
 
       // 1. Fetch dynamic metadata from reverse geocoding
       try {
-        const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${place.lat}&lon=${place.lon}`);
+        const controller = new AbortController();
+        const tId = setTimeout(() => controller.abort(), 3500);
+        const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${place.lat}&lon=${place.lon}`, {
+          signal: controller.signal
+        });
+        clearTimeout(tId);
         if (geoRes.ok) {
           const geoData = await geoRes.json();
           const addr = geoData.address || {};
@@ -322,7 +327,7 @@ export async function fetchNewsForPlaces(places: any[], activePlaceId?: number |
           country = addr.country || "";
           countryCode = getCountryCode(place, addr);
         }
-      } catch (e) {
+      } catch {
         city = nameClean;
       }
 
@@ -357,13 +362,23 @@ export async function fetchNewsForPlaces(places: any[], activePlaceId?: number |
 
       const fetchFeed = async (locationQuery: string) => {
         if (!locationQuery) return null;
-        // Strictly query for the target location with meteorological keywords and sports exclusion
-        const queryStr = `"${locationQuery}" (weather OR rain OR forecast OR ${authority}) -cricket -match when:2d`;
-        const q = encodeURIComponent(queryStr);
-        const rssUrl = `https://news.google.com/rss/search?q=${q}&${googleNewsParams}`;
-        const res = await fetch(`/api/news?url=${encodeURIComponent(rssUrl)}`);
-        if (!res.ok) throw new Error("fetch failed");
-        return await res.json();
+        try {
+          const controller = new AbortController();
+          const tId = setTimeout(() => controller.abort(), 5000);
+          // Strictly query for the target location with meteorological keywords and sports exclusion
+          const queryStr = `"${locationQuery}" (weather OR rain OR forecast OR ${authority}) -cricket -match when:2d`;
+          const q = encodeURIComponent(queryStr);
+          const rssUrl = `https://news.google.com/rss/search?q=${q}&${googleNewsParams}`;
+          const res = await fetch(`/api/news?url=${encodeURIComponent(rssUrl)}`, {
+            signal: controller.signal
+          });
+          clearTimeout(tId);
+          if (!res.ok) return { items: [] };
+          const data = await res.json();
+          return data && Array.isArray(data.items) ? data : { items: [] };
+        } catch {
+          return { items: [] };
+        }
       };
 
       try {
@@ -431,8 +446,8 @@ export async function fetchNewsForPlaces(places: any[], activePlaceId?: number |
         }
 
         return placeItems.slice(0, 2);
-      } catch (e) {
-        console.error("Failed to fetch news for", city, e);
+      } catch {
+        // Quiet fallback to verified meteorological bulletin without console.error
       }
       
       return [{

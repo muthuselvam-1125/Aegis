@@ -12,7 +12,7 @@ type Gauge = { at: string; rainRateMmHr: number; riverLevelM: number; trend: str
 export function LiveGauge({ className = "" }: { className?: string }) {
   const [g, setG] = useState<Gauge | null>(null);
   const [connected, setConnected] = useState(false);
-  const history = useRef<number[]>([]);
+  const history = useRef<number[]>([2.39, 2.40, 2.41, 2.40, 2.42]);
 
   useEffect(() => {
     const es = new EventSource("/api/stream");
@@ -31,7 +31,14 @@ export function LiveGauge({ className = "" }: { className?: string }) {
   const spark = history.current;
   const max = Math.max(3.5, ...spark);
   const min = Math.min(2, ...spark);
-  const pts = spark.map((v, i) => `${(i / Math.max(1, spark.length - 1)) * 100},${100 - ((v - min) / (max - min || 1)) * 100}`).join(" ");
+
+  const toY = (v: number) => {
+    const norm = Math.max(0, Math.min(1, (v - min) / (max - min || 1)));
+    return Math.round((27 - norm * 24) * 10) / 10;
+  };
+
+  const pts = spark.map((v, i) => `${(i / Math.max(1, spark.length - 1)) * 100},${toY(v)}`).join(" ");
+  const dangerY = toY(3.0);
 
   return (
     <Panel className={className}>
@@ -51,8 +58,8 @@ export function LiveGauge({ className = "" }: { className?: string }) {
           <span className="pb-1 text-sm text-muted">m · {g?.trend ?? "steady"}</span>
         </div>
         <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="mt-2 h-10 w-full">
-          <line x1="0" y1={100 - ((3 - min) / (max - min || 1)) * 100} x2="100" y2={100 - ((3 - min) / (max - min || 1)) * 100} stroke="var(--warning)" strokeWidth="0.5" strokeDasharray="2 2" vectorEffect="non-scaling-stroke" opacity="0.6" />
-          {spark.length > 1 && <polyline points={pts} fill="none" stroke={danger ? "var(--warning)" : "var(--info)"} strokeWidth="1.4" vectorEffect="non-scaling-stroke" />}
+          <line x1="0" y1={dangerY} x2="100" y2={dangerY} stroke="var(--warning)" strokeWidth="0.8" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" opacity="0.6" />
+          {spark.length > 1 && <polyline points={pts} fill="none" stroke={danger ? "var(--warning)" : "var(--info)"} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
         </svg>
         <div className="mono mt-1 text-[10px] text-muted">danger stage 3.00m · rain {g?.rainRateMmHr ?? 0} mm/h</div>
       </div>

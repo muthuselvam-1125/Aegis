@@ -56,8 +56,11 @@ export function NewsTicker({ places, activePlaceId }: { places: any[]; activePla
 
           setNews(filteredItems);
         }
-      } catch (e) {
-        console.error("Failed to fetch news:", e);
+      } catch {
+        // Quiet fallback to prevent triggering Next.js dev console error overlay
+        if (active) {
+          setNews([]);
+        }
       } finally {
         if (active) {
           setIsLoading(false);

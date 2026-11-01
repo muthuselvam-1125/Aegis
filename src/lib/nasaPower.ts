@@ -32,6 +32,9 @@ async function fetchWithTimeout(url: string, timeoutMs = 3000): Promise<Response
 
 const MONTH_KEYS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
+// In-memory cache for NASA monthly averages (monthly climatology is immutable within a month)
+const nasaClimatologyCache = new Map<string, number>();
+
 export async function crossCheckWithNasaPower(
   lat: number,
   lon: number,
@@ -39,15 +42,21 @@ export async function crossCheckWithNasaPower(
   now = new Date()
 ): Promise<ClimateCheck> {
   try {
-    const url = `https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M&community=AG&longitude=${lon}&latitude=${lat}&format=JSON`;
-    const res = await fetchWithTimeout(url, 3000);
-    if (!res.ok) throw new Error("NASA POWER request failed");
-
-    const data = await res.json();
     const monthKey = MONTH_KEYS[now.getMonth()];
-    const monthAvgC = data?.properties?.parameter?.T2M?.[monthKey];
+    const cacheKey = `${lat.toFixed(2)}:${lon.toFixed(2)}:${monthKey}`;
+    let monthAvgC = nasaClimatologyCache.get(cacheKey);
 
-    if (typeof monthAvgC !== "number") throw new Error("No climatology value returned");
+    if (monthAvgC === undefined) {
+      const url = `https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M&community=AG&longitude=${lon}&latitude=${lat}&format=JSON`;
+      const res = await fetchWithTimeout(url, 3000);
+      if (!res.ok) throw new Error("NASA POWER request failed");
+
+      const data = await res.json();
+      const val = data?.properties?.parameter?.T2M?.[monthKey];
+      if (typeof val !== "number") throw new Error("No climatology value returned");
+      monthAvgC = val;
+      nasaClimatologyCache.set(cacheKey, monthAvgC);
+    }
 
     const diffC = Math.round((liveTempC - monthAvgC) * 10) / 10;
     // A live daily reading naturally swings well past a monthly average —

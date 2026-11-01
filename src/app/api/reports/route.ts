@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getReports, addReport } from "@/lib/data";
+import { getReports, addReport, updateReportVerified } from "@/lib/data";
 import { getSession } from "@/lib/auth";
 
 export async function GET() {
@@ -31,4 +31,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await getSession();
+    if (!session?.userId) {
+      return NextResponse.json({ error: "Unauthorized. Please log in to verify reports." }, { status: 401 });
+    }
+
+    const body = await req.json();
+    if (!body.id) {
+      return NextResponse.json({ error: "Report id is required" }, { status: 400 });
+    }
+    const updated = await updateReportVerified(Number(body.id), body.verified !== false);
+    return NextResponse.json({ success: true, report: updated });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 

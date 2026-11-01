@@ -107,10 +107,10 @@ export default function AppShell({ children, session }: { children: React.ReactN
   const clock = now ? now.toLocaleTimeString(undefined, { timeZone: tz, hour12: true, hour: 'numeric', minute: '2-digit', second: '2-digit' }) : "--:--:--";
 
   return (
-    <div className="min-h-dvh md:grid md:grid-cols-[200px_1fr]">
+    <div className="min-h-dvh md:grid md:grid-cols-[240px_1fr]">
       {/* Desktop rail */}
       <aside className="sticky top-0 z-40 hidden h-dvh flex-col border-r border-line bg-surface md:flex">
-        <Link href="/" prefetch={false} className="flex items-center gap-2 border-b border-line px-4 py-4">
+        <Link href="/" className="flex items-center gap-2 border-b border-line px-4 py-4">
           <Beacon />
           <span className="display text-xl tracking-tight">AEGIS</span>
         </Link>
@@ -121,7 +121,6 @@ export default function AppShell({ children, session }: { children: React.ReactN
               <Link
                 key={n.href}
                 href={n.href}
-                prefetch={false}
                 className={`flex items-center gap-2 px-4 py-2 text-sm ${active ? "border-l-2 border-live bg-surface-2 font-semibold text-ink" : "border-l-2 border-transparent text-ink-2 hover:bg-surface-2"}`}
               >
                 {n.label}
@@ -135,7 +134,7 @@ export default function AppShell({ children, session }: { children: React.ReactN
           <AuthWidget session={session} />
         </div>
 
-        <a href="/lite" className="border-t border-line px-4 py-3 text-xs text-muted hover:text-ink">
+        <a href="/lite" className="border-t border-line px-4 py-2.5 pb-4 text-xs text-muted hover:text-ink">
           Low-bandwidth text mode →
         </a>
       </aside>
@@ -143,7 +142,7 @@ export default function AppShell({ children, session }: { children: React.ReactN
       <div className="flex min-h-dvh flex-col">
         {/* Status strip */}
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-surface/95 px-3 py-1.5 backdrop-blur-[2px] md:px-4">
-          <Link href="/" prefetch={false} className="flex items-center gap-2 md:hidden">
+          <Link href="/" className="flex items-center gap-2 md:hidden">
             <Beacon />
             <span className="display text-lg">AEGIS</span>
           </Link>
@@ -172,7 +171,6 @@ export default function AppShell({ children, session }: { children: React.ReactN
         {banner && (
           <Link
             href="/alerts"
-            prefetch={false}
             className="flex items-center gap-3 px-3 py-2 md:px-4"
             style={{ backgroundColor: banner.severity === "emergency" ? "var(--emergency)" : banner.severity === "warning" ? "var(--warning)" : banner.severity === "watch" ? "var(--watch)" : "var(--advisory)", color: "#fff" }}
           >
@@ -194,7 +192,7 @@ export default function AppShell({ children, session }: { children: React.ReactN
         {NAV.filter((n) => n.primary).map((n) => {
           const active = pathname === n.href || (n.href !== "/" && pathname.startsWith(n.href));
           return (
-            <Link key={n.href} href={n.href} prefetch={false} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] ${active ? "text-ink" : "text-muted"}`}>
+            <Link key={n.href} href={n.href} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] ${active ? "text-ink" : "text-muted"}`}>
               {active && <span className="absolute top-0 h-0.5 w-8 bg-live" />}
               {n.label === "Household" ? "House" : n.label}
             </Link>
@@ -221,7 +219,7 @@ export default function AppShell({ children, session }: { children: React.ReactN
 
             <div className="grid grid-cols-2 gap-2">
               {NAV.filter((n) => !n.primary).map((n) => (
-                <Link key={n.href} href={n.href} prefetch={false} onClick={() => setMoreOpen(false)} className="rounded-sm border border-line bg-surface-2 px-3 py-3 text-sm">
+                <Link key={n.href} href={n.href} onClick={() => setMoreOpen(false)} className="rounded-sm border border-line bg-surface-2 px-3 py-3 text-sm">
                   {n.label}
                 </Link>
               ))}

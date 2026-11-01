@@ -5,18 +5,27 @@ export async function GET(request: Request) {
   const rssUrl = searchParams.get("url");
 
   if (!rssUrl) {
-    return NextResponse.json({ error: "Missing url parameter" }, { status: 400 });
+    return NextResponse.json({ error: "Missing url parameter", items: [] }, { status: 400 });
   }
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
     const res = await fetch(rssUrl, {
+      signal: controller.signal,
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Accept": "application/rss+xml, application/xml, text/xml, */*"
       }
     });
+    clearTimeout(timeoutId);
 
     if (!res.ok) {
-      throw new Error(`Failed to fetch RSS: ${res.status} ${res.statusText}`);
+      return NextResponse.json({ items: [] }, {
+        status: 200,
+        headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" }
+      });
     }
 
     const xml = await res.text();
@@ -52,9 +61,16 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ items });
-  } catch (error: any) {
-    console.error("News Proxy Error:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ items }, {
+      status: 200,
+      headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" }
+    });
+  } catch {
+    // Graceful fallback: return empty array without logging hard console.error
+    return NextResponse.json({ items: [] }, {
+      status: 200,
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" }
+    });
   }
 }
+

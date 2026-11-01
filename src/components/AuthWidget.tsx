@@ -34,9 +34,9 @@ export function AuthWidget({ session }: { session?: any }) {
         <div className="w-7 h-7 rounded-full bg-live/10 border border-live/30 text-live flex items-center justify-center font-bold text-[11px] flex-shrink-0">
           {initials}
         </div>
-        <div className="flex flex-col overflow-hidden leading-tight">
-          <span className="text-xs font-semibold text-ink truncate">{session.name}</span>
-          <span className="text-[10px] text-muted truncate">{session.email}</span>
+        <div className="flex flex-col overflow-hidden min-w-0 flex-1 leading-tight">
+          <span className="text-xs font-semibold text-ink truncate" title={session.name}>{session.name}</span>
+          <span className="text-[10px] text-muted truncate" title={session.email}>{session.email}</span>
         </div>
       </div>
 

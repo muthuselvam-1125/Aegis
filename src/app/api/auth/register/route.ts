@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { users, places, members } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { createSession } from "@/lib/auth";
+import { calculateCoastalDistanceKm, fetchElevation } from "@/lib/gis";
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,6 +29,15 @@ export async function POST(req: NextRequest) {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
+    const lat = Number(location.latitude || 0);
+    const lon = Number(location.longitude || 0);
+    let elevationM = location.elevation != null ? Math.round(Number(location.elevation)) : 0;
+    if ((elevationM <= 0 || elevationM === 10) && (lat !== 0 || lon !== 0)) {
+      elevationM = await fetchElevation(lat, lon);
+    }
+    const coastalKm = calculateCoastalDistanceKm(lat, lon);
+    const cleanCityName = (location.name || "Home").split(" — ")[0].trim();
+
     const newUser = await db.transaction(async (tx) => {
       // Insert user first to get userId
       const [user] = await tx.insert(users).values({
@@ -37,14 +47,16 @@ export async function POST(req: NextRequest) {
         isVerified: true,
       }).returning();
 
-      // Insert location with userId
+      // Insert location with userId and authentic GIS metrics
       const [newPlace] = await tx.insert(places).values({
-        name: location.name,
+        name: cleanCityName,
         label: "home",
-        lat: location.latitude,
-        lon: location.longitude,
+        lat,
+        lon,
         region: location.admin1 || "",
         country: location.country || "",
+        elevationM,
+        coastalKm,
         isPrimary: true,
         userId: user.id,
       }).returning();

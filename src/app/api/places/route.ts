@@ -1,5 +1,6 @@
 import { getPlaces, addPlace, deletePlace, addMember } from "@/lib/data";
 import { getSession } from "@/lib/auth";
+import { calculateCoastalDistanceKm, fetchElevation } from "@/lib/gis";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,27 @@ export async function POST(req: Request) {
     return Response.json({ error: "name, lat, lon required" }, { status: 400 });
   }
 
-  const newPlace = await addPlace(b, session.userId);
+  const lat = Number(b.lat);
+  const lon = Number(b.lon);
+
+  let elevationM = b.elevationM != null && b.elevationM !== "" ? Number(b.elevationM) : 0;
+  if ((elevationM <= 0 || elevationM === 10) && (lat !== 0 || lon !== 0)) {
+    elevationM = await fetchElevation(lat, lon);
+  }
+
+  const coastalKm = calculateCoastalDistanceKm(lat, lon);
+  const cleanName = String(b.name || "").split(" — ")[0].trim();
+  const region = (b.region || (String(b.name).includes(" — ") ? String(b.name).split(" — ")[1].trim() : "")).trim();
+
+  const newPlace = await addPlace({
+    ...b,
+    name: cleanName,
+    region,
+    lat,
+    lon,
+    elevationM,
+    coastalKm,
+  }, session.userId);
 
   if (session.name && b.isPrimary) {
     await addMember({
@@ -40,6 +61,7 @@ export async function DELETE(req: Request) {
   const id = Number(searchParams.get("id"));
   if (!id) return Response.json({ error: "id required" }, { status: 400 });
 
-  await deletePlace(id);
+  await deletePlace(id, session.userId);
   return Response.json({ ok: true, places: await getPlaces(session.userId) });
 }
+
